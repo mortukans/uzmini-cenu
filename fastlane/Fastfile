@@ -27,8 +27,8 @@ platform :ios do
     setup_ci # temporary keychain on the runner
 
     # Make sure the bundle id + App Store Connect app record exist (idempotent).
+    # produce reads the API key from lane_context (set by app_store_connect_api_key above)
     produce(
-      api_key: api_key,
       app_identifier: APP_ID,
       app_name: APP_NAME,
       language: "en-US",
