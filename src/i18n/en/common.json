@@ -1,0 +1,211 @@
+{
+  "tabs": {
+    "play": "Home",
+    "daily": "Daily",
+    "friends": "Friends",
+    "profile": "Profile"
+  },
+  "common": {
+    "offline": "No connection",
+    "offline_solo": "Offline: results are not saved",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "close": "Close",
+    "back": "Back",
+    "home": "Home",
+    "save": "Save",
+    "soon": "soon",
+    "error": "Something went wrong",
+    "eur": "€"
+  },
+  "category": {
+    "flats": "Flats",
+    "houses": "Houses",
+    "cars": "Cars",
+    "random": "Random",
+    "land": "Land",
+    "all": "All"
+  },
+  "region": {
+    "riga": "Riga",
+    "riga_region": "Riga region",
+    "latvia": "Latvia"
+  },
+  "home": {
+    "play": "Play",
+    "play_today": "Play today",
+    "daily": "Daily challenge",
+    "daily_done": "Played today",
+    "daily_error": "Could not load",
+    "next_in": "Next in {{time}}",
+    "category": "Category and region",
+    "free_play": "Free play",
+    "streak": "Streak",
+    "duel": "Duel",
+    "duel_sub": "Challenge a friend",
+    "room": "Room"
+  },
+  "onboarding": {
+    "tagline": "Guess what people ask for a flat, a car or a sofa on SS. Three rounds and you get it.",
+    "step_photo": "Swipe the photos",
+    "step_price": "Enter a price",
+    "step_guess": "Guess!",
+    "try": "Try 3 rounds",
+    "skip": "Skip",
+    "no_account": "No sign-up needed.",
+    "done_eyebrow": "Practice done",
+    "started_with": "You started with {{n}} points",
+    "done_body": "The daily challenge is the same for everyone. Compare with friends.",
+    "start": "Start"
+  },
+  "round": {
+    "guess_cta": "Guess!",
+    "asking": "Asking",
+    "round_of": "Round {{n}} of {{total}}",
+    "round_n": "Round {{n}}",
+    "points_short": "{{n}} pts",
+    "skip": "Skip",
+    "hint": "Hint",
+    "time_up": "Time's up!",
+    "waiting_others": "Waiting for others…",
+    "empty_pool": "No more listings for this selection",
+    "submit_failed": "Could not submit",
+    "submit_retrying": "Could not submit, retrying…",
+    "leave_title": "Leave the game?",
+    "leave_body": "Your progress will be saved.",
+    "leave_confirm": "Leave"
+  },
+  "keypad": {
+    "empty": "Enter a price",
+    "per_m2": "≈ {{value}}/m²",
+    "per_ha": "≈ {{value}}/ha",
+    "triple_zero": "Three zeros",
+    "backspace": "Delete",
+    "backspace_hint": "Hold to clear everything"
+  },
+  "photo": {
+    "a11y": "Photo {{n}} of {{total}}"
+  },
+  "attr": {
+    "rooms": "{{n}} rooms",
+    "m2": "{{n}} m²",
+    "ha": "{{n}} ha",
+    "floor": "floor {{n}}",
+    "floors": "{{n}} floors",
+    "land": "plot {{v}}",
+    "inspection": "MOT until {{until}}",
+    "fuel": {
+      "petrol": "petrol",
+      "diesel": "diesel",
+      "lpg": "LPG",
+      "hybrid": "hybrid",
+      "electric": "electric"
+    },
+    "gearbox": {
+      "auto": "Automatic",
+      "manual": "Manual"
+    }
+  },
+  "reveal": {
+    "your_guess": "Your guess",
+    "off_by": "Off by {{pct}}%",
+    "off_by_label": "Off by",
+    "points": "{{n}} points",
+    "points_label": "points",
+    "perfect": "Spot on!",
+    "open_listing": "Open listing",
+    "next": "Next",
+    "result": "Result",
+    "source": "Source: {{source}}",
+    "hint_penalty": "without hints: {{n}}",
+    "soft_miss": "Way off, but that's SS for you."
+  },
+  "hint": {
+    "sheet_title": "Hint",
+    "title": "Listing title (−15%)",
+    "cost_token": "You have {{n}} hint tokens",
+    "cost_ad": "Watch a short video to get a hint. Penalty: part of the points.",
+    "bracket": "Price range (−30%)",
+    "photo": "One more photo (−10%)",
+    "cost_free": "Hints are free"
+  },
+  "summary": {
+    "title": "Session complete",
+    "total": "Total {{n}} / {{max}}",
+    "avg": "Average {{n}} points per round",
+    "bias_over": "You overprice by {{pct}}%",
+    "bias_under": "You underprice by {{pct}}%",
+    "bias_none": "On average you are spot on",
+    "play_again": "Play again"
+  },
+  "streak": {
+    "current": "Streak: {{n}}",
+    "best": "Best streak: {{n}}",
+    "over": "Streak over",
+    "try_again": "One more streak"
+  },
+  "daily": {
+    "title": "Uzmini Cenu #{{no}}",
+    "rules": "5 rounds, no timer, one attempt",
+    "share": "Share",
+    "copy": "Copy",
+    "copied": "Copied",
+    "preparing": "Today's challenge is being prepared",
+    "resume": "Continue: round {{n}}",
+    "view_result": "View result",
+    "how_scored": "How is it scored?",
+    "streak_days": "{{n}} days in a row",
+    "unsynced": "Result is waiting to sync",
+    "pending_sync": "Local result {{total}} / 5,000 is waiting to sync",
+    "rank_global": "Today: rank {{rank}}",
+    "rank_friends": "Friends: rank {{rank}}",
+    "info_body": "Each round gives 0–1000 points based on how close you are to the asking price. The error is relative: 10% off scores the same at €40,000 and at €400,000.",
+    "info_err": "{{pct}}% off",
+    "info_grid": "🟩 within 10% · 🟨 within 25% · 🟥 beyond. Colour follows the error, not the points.",
+    "info_reset": "A new challenge every day at 00:00 Riga time. One attempt.",
+    "username_rank": "Pick a username to see your rank"
+  },
+  "leaderboard": {
+    "title": "Leaderboard",
+    "day": "Day",
+    "week": "Week",
+    "all": "All time",
+    "global": "Global",
+    "friends": "Friends",
+    "you": "You",
+    "empty": "Nobody has played yet. Be the first.",
+    "no_friends": "Add friends to see their results",
+    "add_friends": "Add friends",
+    "error": "Could not load the board",
+    "username_banner": "Pick a username to appear on the board"
+  },
+  "auth": {
+    "pick_username": "Pick a username"
+  },
+  "profile": {
+    "username": "Username",
+    "edit_username": "Change username",
+    "username_taken": "That name is already taken",
+    "username_invalid": "3–16 characters: lowercase Latin letters, digits, _",
+    "stats": "Stats",
+    "daily_streak": "Daily challenges in a row",
+    "hint_tokens": "Hint tokens",
+    "best_streak_in": "Best streak: {{category}}",
+    "settings": "Settings",
+    "language": "Language",
+    "haptics": "Haptics",
+    "replay_onboarding": "Replay intro",
+    "legal": "Legal",
+    "privacy": "Privacy policy",
+    "terms": "Terms of use",
+    "takedown": "Listing takedown / contact",
+    "delete_account": "Delete account",
+    "delete_title": "Delete account?",
+    "delete_body": "All results, friends and duels will be deleted. This cannot be undone.",
+    "delete_confirm": "Delete",
+    "delete_title2": "Are you sure?",
+    "delete_body2": "Last warning: the account and its data will be deleted permanently.",
+    "delete_confirm2": "Yes, delete everything",
+    "no_username_card": "Pick a username to play with friends and appear on the leaderboard."
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+.cache/
+*.log
+.env
+.env.*
+
+# test/fixtures/ holds real SS.com pages saved by the Phase 0 probe. They contain
+# third-party ad text (titles, descriptions, masked phone numbers) and are kept
+# ONLY as local parser fixtures. Do not publish them to a public repository or
+# copy them anywhere outside this working tree (docs/09-legal-risks.md).

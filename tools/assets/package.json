@@ -1,0 +1,7 @@
+{
+  "name": "uzmini-cenu-asset-tools",
+  "private": true,
+  "type": "module",
+  "scripts": { "generate": "node generate.mjs" },
+  "devDependencies": { "sharp": "^0.34.3" }
+}

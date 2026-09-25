@@ -1,0 +1,28 @@
+{
+  "name": "uzmini-cenu-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SS.com listings scraper for Uzmini Cenu (docs/03, docs/12). Polite, serial, sell-only.",
+  "engines": { "node": ">=22.18" },
+  "bin": { "scrape": "./src/index.ts" },
+  "scripts": {
+    "scrape": "tsx src/index.ts",
+    "run": "tsx src/index.ts run",
+    "recheck": "tsx src/index.ts recheck",
+    "stats": "tsx src/index.ts stats",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "cheerio": "^1.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

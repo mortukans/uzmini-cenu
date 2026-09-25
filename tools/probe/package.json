@@ -1,0 +1,19 @@
+{
+  "name": "uzmini-cenu-probe",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Phase 0 throwaway probe for SS.com: robots, HTML structure, rate tolerance, hotlinking, churn. Never shipped.",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "robots": "node probe.ts robots",
+    "discover": "node probe.ts discover",
+    "rate": "node probe.ts rate",
+    "hotlink": "node probe.ts hotlink",
+    "recheck": "node probe.ts recheck",
+    "report": "node probe.ts report"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0"
+  }
+}

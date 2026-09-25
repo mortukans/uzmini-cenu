@@ -1,0 +1,71 @@
+name: iOS → TestFlight
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      # Public app config (safe to inline: anon key is the publishable key)
+      EXPO_PUBLIC_SUPABASE_URL: https://szlqqshbuswezepvnzsb.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_y712wSYSHQbGuVNEEf136Q_h4YWsYZf
+      EXPO_PUBLIC_UNIVERSAL_LINK_HOST: uzminicenu.lv
+      EXPO_PUBLIC_ADS_ENABLED: 'false'
+      EAS_PROJECT_ID: c5390816-5979-4f90-81b8-d15b5e63f401
+      # Apple (GitHub secrets)
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      BUILD_NUMBER: ${{ github.run_number }}
+      FASTLANE_SKIP_UPDATE_CHECK: '1'
+      LC_ALL: en_US.UTF-8
+      LANG: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | tail -1)"
+
+      - name: Install JS deps
+        run: npm ci
+
+      - name: Typecheck + tests
+        run: npm run typecheck && npm test
+
+      - name: Generate native iOS project (Continuous Native Generation)
+        run: npx expo prebuild --platform ios --no-install --clean
+
+      - name: Install CocoaPods
+        run: cd ios && pod install --repo-update
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: false
+
+      - name: Build + upload to TestFlight
+        run: |
+          gem install fastlane --no-document -q
+          fastlane ios beta
+
+      - name: Keep IPA as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa
+          path: build/*.ipa
+          if-no-files-found: ignore

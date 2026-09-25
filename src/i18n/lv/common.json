@@ -1,0 +1,211 @@
+{
+  "tabs": {
+    "play": "Sākums",
+    "daily": "Diena",
+    "friends": "Draugi",
+    "profile": "Profils"
+  },
+  "common": {
+    "offline": "Nav savienojuma",
+    "offline_solo": "Bezsaistē: rezultāti netiek saglabāti",
+    "retry": "Mēģināt vēlreiz",
+    "cancel": "Atcelt",
+    "close": "Aizvērt",
+    "back": "Atpakaļ",
+    "home": "Uz sākumu",
+    "save": "Saglabāt",
+    "soon": "drīzumā",
+    "error": "Kaut kas nogāja greizi",
+    "eur": "€"
+  },
+  "category": {
+    "flats": "Dzīvokļi",
+    "houses": "Mājas",
+    "cars": "Auto",
+    "random": "Random",
+    "land": "Zeme",
+    "all": "Visi"
+  },
+  "region": {
+    "riga": "Rīga",
+    "riga_region": "Rīgas reģ.",
+    "latvia": "Latvija"
+  },
+  "home": {
+    "play": "Spēlēt",
+    "play_today": "Spēlēt šodien",
+    "daily": "Dienas izaicinājums",
+    "daily_done": "Šodien jau izspēlēts",
+    "daily_error": "Nevar ielādēt",
+    "next_in": "Nākamais pēc {{time}}",
+    "category": "Kategorija un reģions",
+    "free_play": "Brīvā spēle",
+    "streak": "Sērija",
+    "duel": "Duelis",
+    "duel_sub": "Izaicini draugu",
+    "room": "Istaba"
+  },
+  "onboarding": {
+    "tagline": "Uzmini, cik prasa par dzīvokli, auto vai dīvānu SS. Trīs kārtas, un tu saprati.",
+    "step_photo": "Bīdi foto",
+    "step_price": "Ievadi cenu",
+    "step_guess": "Uzmini!",
+    "try": "Izmēģināt 3 kārtas",
+    "skip": "Izlaist",
+    "no_account": "Bez reģistrācijas.",
+    "done_eyebrow": "Treniņš pabeigts",
+    "started_with": "Tu sāki ar {{n}} punktiem",
+    "done_body": "Dienas izaicinājums ir viens visiem — salīdzini ar draugiem.",
+    "start": "Sākt"
+  },
+  "round": {
+    "guess_cta": "Uzmini!",
+    "asking": "Prasa",
+    "round_of": "{{n}}. kārta no {{total}}",
+    "round_n": "{{n}}. kārta",
+    "points_short": "{{n}} p.",
+    "skip": "Izlaist",
+    "hint": "Padoms",
+    "time_up": "Laiks!",
+    "waiting_others": "Gaidām citus…",
+    "empty_pool": "Šai izvēlei sludinājumi beigušies",
+    "submit_failed": "Nevar nosūtīt",
+    "submit_retrying": "Nevar nosūtīt, mēģinam vēlreiz…",
+    "leave_title": "Pamest spēli?",
+    "leave_body": "Progress tiks saglabāts.",
+    "leave_confirm": "Pamest"
+  },
+  "keypad": {
+    "empty": "Ievadi cenu",
+    "per_m2": "≈ {{value}}/m²",
+    "per_ha": "≈ {{value}}/ha",
+    "triple_zero": "Trīs nulles",
+    "backspace": "Dzēst",
+    "backspace_hint": "Turi, lai notīrītu visu"
+  },
+  "photo": {
+    "a11y": "Foto {{n}} no {{total}}"
+  },
+  "attr": {
+    "rooms": "{{n}} ist.",
+    "m2": "{{n}} m²",
+    "ha": "{{n}} ha",
+    "floor": "{{n}}. st.",
+    "floors": "{{n}} stāvi",
+    "land": "zeme {{v}}",
+    "inspection": "TA līdz {{until}}",
+    "fuel": {
+      "petrol": "B",
+      "diesel": "D",
+      "lpg": "Gāze",
+      "hybrid": "Hibrīds",
+      "electric": "Elektro"
+    },
+    "gearbox": {
+      "auto": "Automāts",
+      "manual": "Manuāla"
+    }
+  },
+  "reveal": {
+    "your_guess": "Tavs minējums",
+    "off_by": "Garām par {{pct}} %",
+    "off_by_label": "Garām par",
+    "points": "{{n}} punkti",
+    "points_label": "punkti",
+    "perfect": "Precīzi!",
+    "open_listing": "Atvērt sludinājumu",
+    "next": "Nākamais",
+    "result": "Rezultāts",
+    "source": "Avots: {{source}}",
+    "hint_penalty": "bez padoma: {{n}}",
+    "soft_miss": "Garām, bet tāds ir SS."
+  },
+  "hint": {
+    "sheet_title": "Padoms",
+    "title": "Sludinājuma nosaukums (−15 %)",
+    "cost_token": "Tev ir {{n}} padoma žetoni",
+    "cost_ad": "Noskaties īsu video, lai saņemtu padomu. Sods: daļa punktu.",
+    "bracket": "Cenu diapazons (−30 %)",
+    "photo": "Vēl viens foto (−10 %)",
+    "cost_free": "Padomi ir bez maksas"
+  },
+  "summary": {
+    "title": "Sesija pabeigta",
+    "total": "Kopā {{n}} / {{max}}",
+    "avg": "Vidēji {{n}} punkti kārtā",
+    "bias_over": "Tu pārvērtē par {{pct}} %",
+    "bias_under": "Tu novērtē par zemu par {{pct}} %",
+    "bias_none": "Tu trāpi vidēji precīzi",
+    "play_again": "Spēlēt vēlreiz"
+  },
+  "streak": {
+    "current": "Sērija: {{n}}",
+    "best": "Labākā sērija: {{n}}",
+    "over": "Sērija pārtrūka",
+    "try_again": "Vēl vienu sēriju"
+  },
+  "daily": {
+    "title": "Uzmini Cenu #{{no}}",
+    "rules": "5 kārtas, bez laika, viens mēģinājums",
+    "share": "Dalīties",
+    "copy": "Kopēt",
+    "copied": "Nokopēts",
+    "preparing": "Šodienas izaicinājums vēl gatavojas",
+    "resume": "Turpināt: {{n}}. kārta",
+    "view_result": "Skatīt rezultātu",
+    "how_scored": "Kā skaita punktus?",
+    "streak_days": "{{n}} dienas pēc kārtas",
+    "unsynced": "Rezultāts gaida sinhronizāciju",
+    "pending_sync": "Vietējais rezultāts {{total}} / 5 000 gaida sinhronizāciju",
+    "rank_global": "Šodien: {{rank}}. vieta",
+    "rank_friends": "Draugi: {{rank}}. vieta",
+    "info_body": "Katrā kārtā 0–1000 punkti pēc tā, cik tuvu esi prasītajai cenai. Kļūda ir relatīva: 10 % garām dod tikpat pie 40 000 € un pie 400 000 €.",
+    "info_err": "{{pct}} % garām",
+    "info_grid": "🟩 līdz 10 % · 🟨 līdz 25 % · 🟥 tālāk. Krāsa atkarīga no kļūdas, ne no punktiem.",
+    "info_reset": "Jauns izaicinājums katru dienu 00:00 pēc Rīgas laika. Viens mēģinājums.",
+    "username_rank": "Izvēlies lietotājvārdu, lai redzētu savu vietu"
+  },
+  "leaderboard": {
+    "title": "Līderu tabula",
+    "day": "Diena",
+    "week": "Nedēļa",
+    "all": "Visu laiku",
+    "global": "Globāli",
+    "friends": "Draugi",
+    "you": "Tu",
+    "empty": "Vēl neviens nav spēlējis. Esi pirmais.",
+    "no_friends": "Pievieno draugus, lai redzētu viņu rezultātus",
+    "add_friends": "Pievienot draugus",
+    "error": "Nevar ielādēt tabulu",
+    "username_banner": "Izvēlies lietotājvārdu, lai parādītos tabulā"
+  },
+  "auth": {
+    "pick_username": "Izvēlēties lietotājvārdu"
+  },
+  "profile": {
+    "username": "Lietotājvārds",
+    "edit_username": "Mainīt lietotājvārdu",
+    "username_taken": "Šis vārds jau ir aizņemts",
+    "username_invalid": "3–16 simboli: mazie latīņu burti, cipari, _",
+    "stats": "Statistika",
+    "daily_streak": "Dienas izaicinājumi pēc kārtas",
+    "hint_tokens": "Padoma žetoni",
+    "best_streak_in": "Labākā sērija: {{category}}",
+    "settings": "Iestatījumi",
+    "language": "Valoda",
+    "haptics": "Vibrācija",
+    "replay_onboarding": "Atkārtot ievadu",
+    "legal": "Juridiskais",
+    "privacy": "Privātuma politika",
+    "terms": "Lietošanas noteikumi",
+    "takedown": "Sludinājuma noņemšana / kontakti",
+    "delete_account": "Dzēst kontu",
+    "delete_title": "Dzēst kontu?",
+    "delete_body": "Tiks dzēsti visi rezultāti, draugi un dueļi. Šo nevar atsaukt.",
+    "delete_confirm": "Dzēst",
+    "delete_title2": "Tiešām?",
+    "delete_body2": "Pēdējais brīdinājums: konts un dati tiks dzēsti neatgriezeniski.",
+    "delete_confirm2": "Jā, dzēst visu",
+    "no_username_card": "Izvēlies lietotājvārdu, lai spēlētu ar draugiem un parādītos līderu tabulā."
+  }
+}

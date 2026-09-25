@@ -1,0 +1,24 @@
+{
+  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": { "simulator": false },
+      "env": { "EXPO_PUBLIC_ADS_ENABLED": "false" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "env": { "EXPO_PUBLIC_ADS_ENABLED": "false" }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "env": { "EXPO_PUBLIC_ADS_ENABLED": "false" }
+    }
+  },
+  "submit": {
+    "production": { "ios": { "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID" } }
+  }
+}
