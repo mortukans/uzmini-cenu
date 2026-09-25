@@ -91,7 +91,7 @@ export const useSession = create<SessionStore>((set, get) => ({
       console.log('[round_state]', prev.phase, '→', next.phase, 'round', next.roundNo);
     }
     set(next);
-    void afterTransition(prev.phase, next);
+    afterTransition(prev.phase, next).catch((e) => onSideEffectError(e, next.phase));
   },
 }));
 
@@ -104,7 +104,18 @@ export const thumbUrl = (url: string) => url.replace(/\.800\.jpg$/i, '.t.jpg');
 
 async function prefetchRound(r: Round | undefined): Promise<boolean> {
   if (!r?.photo_urls?.length) return true;
-  try { return await Image.prefetch(r.photo_urls[0], 'memory-disk'); } catch { return false; }
+  try { return Boolean(await Image.prefetch(r.photo_urls[0], 'memory-disk')); } catch { return false; }
+}
+
+/** A side effect threw. During LOADING/STAGED that would otherwise hang the screen. */
+function onSideEffectError(e: unknown, phase: Phase) {
+  if (__DEV__) {
+    // eslint-disable-next-line no-console
+    console.warn('[session] side effect failed in', phase, e);
+  }
+  const st = useSession.getState();
+  if (st.phase === 'LOADING') dispatch({ type: 'LOAD_FAILED', error: e instanceof RpcError ? e.code : 'network' });
+  else if (st.phase === 'STAGED') dispatch({ type: 'PHOTO_READY' });
 }
 
 // ─── transitions with side effects ───────────────────────────────────────────
@@ -114,19 +125,23 @@ async function afterTransition(prevPhase: Phase, s: SessionState) {
   const cfg = s.config;
   if (!cfg) return;
 
-  if (s.phase === 'LOADING' && prevPhase !== 'LOADING') {
+  // Note: `prevPhase` is very often already LOADING here (initialState, the
+  // reset in startSession, stage() with an empty queue), so the trigger must
+  // not depend on a phase *change*. ensurePool() dedupes concurrent calls.
+  if (s.phase === 'LOADING') {
     void ensurePool();
   }
 
   if (s.phase === 'STAGED' && prevPhase !== 'STAGED') {
     if (stagedTimer) clearTimeout(stagedTimer);
     const r = currentRound(s);
-    track('round_start', { mode: cfg.mode, category: r?.category, listing_id: r?.id, round_no: s.roundNo });
-    // 2 s timeout: show a placeholder and continue anyway.
+    // 2 s timeout: show a placeholder and continue anyway. Armed FIRST so that
+    // nothing below (analytics, prefetch, pool refill) can keep us in STAGED.
     stagedTimer = setTimeout(() => { if (gen === generation) dispatch({ type: 'PHOTO_READY' }); }, STAGED_TIMEOUT_MS);
-    void prefetchRound(r).then(() => { if (gen === generation) dispatch({ type: 'PHOTO_READY' }); });
+    try { track('round_start', { mode: cfg.mode, category: r?.category, listing_id: r?.id, round_no: s.roundNo }); } catch { /* analytics never blocks play */ }
+    prefetchRound(r).then(() => { if (gen === generation) dispatch({ type: 'PHOTO_READY' }); }, () => { /* handled by timeout */ });
     // Prefetch n+1, n+2 and refill the pool.
-    void Promise.all(s.rounds.slice(1, 1 + PREFETCH_AHEAD).map(prefetchRound));
+    for (const next of s.rounds.slice(1, 1 + PREFETCH_AHEAD)) void prefetchRound(next);
     void ensurePool();
   }
 
@@ -173,10 +188,11 @@ async function ensurePool() {
     useSession.setState({ offline: false });
   } catch (e) {
     if (gen !== generation) return;
-    useSession.setState({ offline: true });
-    dispatch({ type: 'LOAD_FAILED', error: e instanceof RpcError ? e.code : 'network' });
+    const code = e instanceof RpcError ? e.code : 'network';
+    useSession.setState({ offline: code === 'network' });
+    dispatch({ type: 'LOAD_FAILED', error: code });
   } finally {
-    loading = false;
+    if (gen === generation) loading = false;
   }
 }
 
@@ -302,6 +318,7 @@ function cancelTimers() {
 
 async function startSession(o: StartSessionOptions) {
   generation += 1;
+  const gen = generation;
   cancelTimers();
   loading = false;
   opts = o;
@@ -317,14 +334,21 @@ async function startSession(o: StartSessionOptions) {
     sessionId, mode: o.mode, category, region, totalRounds, timerSec: o.timer, waitForOthers: o.waitForOthers,
     allowSkip: o.mode === 'solo' && !o.localScoring, allowHints: hintsAllowed(o.mode) && !o.localScoring, contextId: o.contextId,
   };
-  useSession.setState({ ...initialState, daily: null, dailySubmitted: null, offline: false, hintTokens: await getHintTokens(), streakBest: 0 });
+  const hintTokens = await getHintTokens().catch(() => 0);
+  if (generation !== gen) return; // superseded while awaiting storage
+  useSession.setState({ ...initialState, daily: null, dailySubmitted: null, offline: false, hintTokens, streakBest: 0 });
 
   if (o.mode === 'daily') {
     dispatch({ type: 'START', config });
-    await loadDaily(generation, config);
+    await loadDaily(gen, config);
     return;
   }
+  if (generation !== gen) return; // superseded while awaiting getHintTokens
   dispatch({ type: 'START', config, rounds: o.rounds, streak: o.streak, outcomes: o.priorOutcomes });
+  // START without pre-supplied rounds leaves us in LOADING. The phase did not
+  // *change* (the store was already LOADING after the reset above), so the
+  // transition hook alone cannot be relied on: fetch the first pool here.
+  if (useSession.getState().phase === 'LOADING') void ensurePool();
 }
 
 async function loadDaily(gen: number, config: SessionConfig) {

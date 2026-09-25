@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import type { Category } from '../../api/types';
 import { thumbUrl } from '../../game/session';
@@ -16,6 +16,8 @@ import { colors, radius, spacing, type } from '../theme';
 
 const GLYPH: Record<Category, string> = { flats: '🏢', houses: '🏠', cars: '🚗', random: '📦', land: '🌲' };
 const PHOTO_TIMEOUT_MS = 2000;
+/** Page snap duration; a plain ease-out so the last/first photo never rubber-bands. */
+const SNAP_MS = 220;
 
 interface Props {
   urls: string[];
@@ -42,14 +44,18 @@ export function PhotoCarousel({ urls, category, source, listingId, visibleCount,
   const goTo = useCallback((i: number) => {
     const clamped = Math.max(0, Math.min(photos.length - 1, i));
     setIndex(clamped);
-    tx.value = withSpring(-clamped * w, { damping: 20, stiffness: 180 });
+    // Crisp paging snap: no spring / overshoot (looked like a rubber-band).
+    tx.value = withTiming(-clamped * w, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
     if (clamped !== index) track('round_photo_swipe', { index: clamped });
   }, [photos.length, w, index, tx]);
 
+  // The strip may only travel between the first and the last page: no
+  // overscroll / bounce beyond either end (pagingEnabled-like behaviour).
+  const minX = -(photos.length - 1) * w;
   const pan = Gesture.Pan()
     .activeOffsetX([-12, 12])
     .failOffsetY([-16, 16])
-    .onUpdate((e) => { tx.value = -index * w + e.translationX; })
+    .onUpdate((e) => { tx.value = Math.max(minX, Math.min(0, -index * w + e.translationX)); })
     .onEnd((e) => {
       const dir = e.translationX < -w / 5 || e.velocityX < -500 ? 1 : e.translationX > w / 5 || e.velocityX > 500 ? -1 : 0;
       runOnJS(goTo)(index + dir);

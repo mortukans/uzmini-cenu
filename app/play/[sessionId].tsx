@@ -184,7 +184,7 @@ export default function PlayScreen() {
 
       {round && (s.phase === 'STAGED' || s.phase === 'GUESSING' || s.phase === 'SUBMITTING') && (
         <View style={styles.playBody}>
-          <ScrollView style={styles.top} contentContainerStyle={styles.topContent} bounces={false} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.top} contentContainerStyle={styles.topContent} bounces={false} alwaysBounceVertical={false} overScrollMode="never" showsVerticalScrollIndicator={false}>
             <PhotoCarousel
               urls={round.photo_urls}
               category={round.category}
