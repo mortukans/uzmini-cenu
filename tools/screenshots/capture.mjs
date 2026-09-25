@@ -190,7 +190,7 @@ try {
   await capture('05-cars');
 
   console.log('6. profile with username');
-  const username = `screenshot_demo_${Math.random().toString(36).slice(2, 5)}`.slice(0, 16);
+  const username = `demo_${Math.random().toString(36).replace(/[^a-z0-9]/g, "").slice(0, 4)}`; // 3-16 chars, must not look like player_xxxxxx
   await page.goto(`${BASE}/profile`, { waitUntil: 'domcontentloaded' });
   await btn('Izvēlēties lietotājvārdu').waitFor({ timeout: 60_000 });
   await btn('Izvēlēties lietotājvārdu').click();
