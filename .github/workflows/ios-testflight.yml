@@ -43,7 +43,8 @@ jobs:
       - name: Select Xcode (SDK 57 needs Xcode 26)
         run: |
           ls -d /Applications/Xcode*.app
-          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1); [ -z "$X" ] && X=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          # Pin to Xcode 26.0.x: newer Swift 6.2.x toolchains reject expo-modules-jsi (expo/expo#50470)
+          X=$(ls -d /Applications/Xcode_26.0*.app 2>/dev/null | sort -V | tail -1); [ -z "$X" ] && X=$(ls -d /Applications/Xcode_26*.app | sort -V | head -1)
           sudo xcode-select -s "$X" && xcodebuild -version
 
       - name: Install JS deps
