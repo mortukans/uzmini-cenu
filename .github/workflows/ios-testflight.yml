@@ -55,6 +55,9 @@ jobs:
       - name: Generate native iOS project (Continuous Native Generation)
         run: npx expo prebuild --platform ios --no-install --clean
 
+      - name: Patch Podfile (expo/expo#50470 workaround)
+        run: ruby tools/ci/patch-podfile.rb
+
       - name: Install CocoaPods
         run: cd ios && pod install --repo-update
 
