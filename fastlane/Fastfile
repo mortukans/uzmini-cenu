@@ -41,11 +41,8 @@ platform :ios do
       bundle.create_capability(cap)
     end
     app = Spaceship::ConnectAPI::App.find(APP_ID)
-    unless app
-      UI.message("Creating App Store Connect app record")
-      app = Spaceship::ConnectAPI::App.create(name: APP_NAME, version_string: "0.1.0", sku: "uzmini-cenu-ios",
-                                              primary_locale: "en-US", bundle_id: APP_ID, platforms: ["IOS"])
-    end
+    # Apple's API does not allow creating apps; the record is created once by hand in App Store Connect.
+    UI.user_error!("No App Store Connect app for #{APP_ID}. Create it in App Store Connect → My Apps → + (bundle id #{APP_ID}).") unless app
     UI.success("App record ready: #{app.name} (#{app.id})")
 
     # Distribution certificate. The private key of any cert created elsewhere (e.g. by Expo) is not
