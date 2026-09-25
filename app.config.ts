@@ -21,7 +21,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       UIBackgroundModes: ['remote-notification'],
       CFBundleAllowMixedLocalizations: true,
       CFBundleLocalizations: ['lv', 'ru', 'en'],
-      NSUserTrackingUsageDescription: 'Used only to show fewer, more relevant ads.',
     },
     entitlements: { 'aps-environment': 'production' },
   },
@@ -49,15 +48,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-localization',
     ['expo-splash-screen', { backgroundColor: '#0F1115', image: './assets/splash-icon.png', imageWidth: 180 }],
     ['expo-notifications', { color: '#F5B840' }],
-    [
-      'react-native-google-mobile-ads',
-      {
-        // Test app ids until real AdMob ids exist. Replace in EAS secrets / here before release.
-        iosAppId: process.env.ADMOB_IOS_APP_ID ?? 'ca-app-pub-3940256099942544~1458002511',
-        androidAppId: process.env.ADMOB_ANDROID_APP_ID ?? 'ca-app-pub-3940256099942544~3347511713',
-        userTrackingUsageDescription: 'Used only to show fewer, more relevant ads.',
-      },
-    ],
     ...(process.env.EXPO_PUBLIC_SENTRY_DSN
       ? [['@sentry/react-native/expo', { organization: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT }] as [string, object]]
       : []),

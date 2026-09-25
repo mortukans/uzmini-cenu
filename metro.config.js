@@ -3,7 +3,7 @@ const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
 const config = getDefaultConfig(__dirname);
-const WEB_STUBS = new Set(['react-native-google-mobile-ads']);
+const WEB_STUBS = new Set([]);
 const stub = path.resolve(__dirname, 'src/web-stubs/empty.js');
 
 const prev = config.resolver.resolveRequest;
