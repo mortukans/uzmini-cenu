@@ -27,6 +27,7 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       DIST_CERT_P12: ${{ secrets.DIST_CERT_P12 }}
       DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+      DIST_CERT_ID: RPL8T52MWC
       BUILD_NUMBER: ${{ github.run_number }}
       FASTLANE_SKIP_UPDATE_CHECK: '1'
       LC_ALL: en_US.UTF-8

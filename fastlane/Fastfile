@@ -72,7 +72,8 @@ platform :ios do
     end
 
     # App Store provisioning profile for the bundle id.
-    sigh(api_key: api_key, app_identifier: APP_ID, team_id: ENV.fetch("APPLE_TEAM_ID"), force: true, skip_certificate_verification: true)
+    sigh(api_key: api_key, app_identifier: APP_ID, team_id: ENV.fetch("APPLE_TEAM_ID"), force: true, skip_certificate_verification: true,
+         cert_id: ENV["DIST_CERT_ID"])
 
     update_code_signing_settings(
       path: XCODEPROJ,
