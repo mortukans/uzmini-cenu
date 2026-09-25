@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="lv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0F1115">
+<title>Uzmini Cenu</title>
+<style>
+:root{--bg:#0F1115;--surface:#181B22;--border:#2A2F3A;--text:#F4F5F7;--muted:#9AA1AE;--accent:#F5B840;--accent-text:#1A1400}
+*{box-sizing:border-box}
+html,body{background:var(--bg);margin:0;color:var(--text);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:480px;margin:0 auto;padding:48px 16px;text-align:center}
+h1{font-size:26px;margin:20px 0 4px}
+code{background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:8px;font-size:20px;letter-spacing:2px}
+p{color:var(--muted)}
+.btn{display:inline-block;background:var(--accent);color:var(--accent-text);border-radius:12px;padding:12px 22px;text-decoration:none;font-weight:700;margin:8px 4px}
+.btn.alt{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">Lapa nav atrasta</h1>
+  <p id="msg">Page not found.</p>
+  <a class="btn" id="open" href="#" style="display:none">Atvērt lietotnē</a>
+  <a class="btn alt" id="home" href="/uzmini-cenu/">Uzmini Cenu</a>
+</div>
+<script>
+(function(){
+  // GitHub Pages serves this file for /r/CODE and /d/N; handle the deep link here.
+  var STORE='https://apps.apple.com/app/id6816056345';
+  var m=location.pathname.match(/\/(r|d)\/([^\/]+)\/?$/);
+  if(!m)return;
+  var kind=m[1],val=m[2];
+  val=kind==='r'?val.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12):val.replace(/[^0-9]/g,'').slice(0,6);
+  if(!val)return;
+  var deep='uzminicenu://'+kind+'/'+val;
+  document.getElementById('title').innerHTML=kind==='r'?'Ielūgums uz istabu <code>'+val+'</code>':'Dienas izaicinājums <code>#'+val+'</code>';
+  document.getElementById('msg').innerHTML='Atveram lietotni… Ja nekas nenotiek, lietotne vēl nav uzinstalēta.<br><span lang="en">Opening the app… If nothing happens, the app is not installed yet.</span>';
+  var o=document.getElementById('open');o.href=deep;o.style.display='';
+  var h=document.getElementById('home');h.href=STORE;h.textContent='App Store';
+  var t=setTimeout(function(){location.href=STORE;},1800);
+  document.addEventListener('visibilitychange',function(){if(document.hidden)clearTimeout(t);});
+  window.addEventListener('pagehide',function(){clearTimeout(t);});
+  location.href=deep;
+})();
+</script>
+</body>
+</html>

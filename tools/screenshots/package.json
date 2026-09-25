@@ -1,0 +1,17 @@
+{
+  "name": "uzmini-cenu-screenshots",
+  "private": true,
+  "type": "module",
+  "description": "App Store screenshot pipeline: capture.mjs (Playwright, web build) + compose.mjs (sharp)",
+  "scripts": {
+    "capture": "node capture.mjs",
+    "compose": "node compose.mjs",
+    "all": "node capture.mjs && node compose.mjs"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.117.1",
+    "pg": "^8.23.0",
+    "playwright": "^1.52.0",
+    "sharp": "^0.34.1"
+  }
+}
