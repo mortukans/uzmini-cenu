@@ -1,3 +1,18 @@
+diff --git a/node_modules/expo-modules-jsi/apple/Package.swift b/node_modules/expo-modules-jsi/apple/Package.swift
+index 77b0525..4da69e7 100644
+--- a/node_modules/expo-modules-jsi/apple/Package.swift
++++ b/node_modules/expo-modules-jsi/apple/Package.swift
+@@ -85,6 +85,10 @@ let package = Package(
+       ],
+       swiftSettings: [
+         .interoperabilityMode(.Cxx),
++        // Patched (uzmini-cenu): Swift 6.2.x toolchains reject the `sending` pointer captures in
++        // JavaScriptRuntime.swift under Swift 6 language mode (expo/expo#50470). In Swift 5 mode
++        // the same diagnostics are warnings.
++        .swiftLanguageMode(.v5),
+ 
+         // Enable some upcoming features that improve ergonomics and reduce executor hoppings
+         // https://github.com/swiftlang/swift-evolution/blob/main/proposals/0461-async-function-isolation.md
 diff --git a/node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h b/node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h
 index 6115e87..957527c 100644
 --- a/node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h
