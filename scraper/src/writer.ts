@@ -92,8 +92,14 @@ export function createWriter(sb: SupabaseClient = createSupabase()): Writer {
 
     async knownUrls(urls) {
       const out = new Set<string>();
-      for (let i = 0; i < urls.length; i += 200) {
-        const { data, error } = await sb.from('listings').select('source_url').in('source_url', urls.slice(i, i + 200));
+      // ~70-char URLs: keep each GET well under the ~8 KB query-string limit, retry transient failures
+      for (let i = 0; i < urls.length; i += 60) {
+        let res: { data: { source_url: string }[] | null; error: { message: string } | null } | undefined;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try { res = await sb.from('listings').select('source_url').in('source_url', urls.slice(i, i + 60)); break; }
+          catch (e) { if (attempt === 2) throw e; await new Promise((r) => setTimeout(r, 2000 * (attempt + 1))); }
+        }
+        const { data, error } = res!;
         fail('knownUrls', error);
         for (const r of data ?? []) out.add(r.source_url as string);
       }
