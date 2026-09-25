@@ -16,3 +16,21 @@
 [13:35:30] 302    31ms       0B https://www.ss.com/lv/real-estate/flats/riga/zolitude/sell/page3.html
 [13:35:32] 302    22ms       0B https://www.ss.com/lv/real-estate/flats/riga/sarkandaugava/sell/page3.html
 [13:35:35] 302    24ms       0B https://www.ss.com/lv/real-estate/flats/riga/chiekurkalns/sell/page3.html
+[13:35:37] 302    20ms       0B https://www.ss.com/lv/real-estate/flats/riga/vecmilgravis/sell/page3.html
+[13:35:40] 302    23ms       0B https://www.ss.com/lv/real-estate/flats/riga/bolderaya/sell/page3.html
+[13:35:42] 302    21ms       0B https://www.ss.com/lv/real-estate/flats/riga/darzciems/sell/page3.html
+[13:35:45] 302    24ms       0B https://www.ss.com/lv/real-estate/flats/riga/tornjakalns/sell/page3.html
+[13:35:47] 302    48ms       0B https://www.ss.com/lv/real-estate/flats/riga/grizinkalns/sell/page3.html
+[13:35:48] list stage: 146 pages, 3920 candidate rows
+D:\VM Linux 2\PROJECTS\uzmini-cenu\scraper\src\writer.ts:70
+    if (e) throw new Error(`${op}: ${e.message}`);
+                 ^
+
+Error: knownUrls: TypeError: fetch failed
+    at fail (D:\VM Linux 2\PROJECTS\uzmini-cenu\scraper\src\writer.ts:70:18)
+    at Object.knownUrls (D:\VM Linux 2\PROJECTS\uzmini-cenu\scraper\src\writer.ts:97:9)
+    at async runNight (D:\VM Linux 2\PROJECTS\uzmini-cenu\scraper\src\scheduler.ts:108:53)
+    at async Object.cmdRun (D:\VM Linux 2\PROJECTS\uzmini-cenu\scraper\src\index.ts:54:18)
+    at async <anonymous> (D:\VM Linux 2\PROJECTS\uzmini-cenu\scraper\src\index.ts:108:1)
+
+Node.js v24.19.0
