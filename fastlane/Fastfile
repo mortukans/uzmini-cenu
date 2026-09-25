@@ -26,16 +26,27 @@ platform :ios do
 
     setup_ci # temporary keychain on the runner
 
-    # Make sure the bundle id + App Store Connect app record exist (idempotent).
-    # produce reads the API key from lane_context (set by app_store_connect_api_key above)
-    produce(
-      app_identifier: APP_ID,
-      app_name: APP_NAME,
-      language: "en-US",
-      sku: "uzmini-cenu-ios",
-      team_id: ENV.fetch("APPLE_TEAM_ID"),
-      enable_services: { push_notification: "on", associated_domains: "on" },
-    )
+    # Bundle id + capabilities + App Store Connect app record, straight through the ASC API
+    # (fastlane's `produce` needs an Apple ID login; the API key path is these calls).
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.from(hash: api_key)
+    bundle = Spaceship::ConnectAPI::BundleId.all(filter: { identifier: APP_ID }).find { |b| b.identifier == APP_ID }
+    unless bundle
+      UI.message("Registering bundle id #{APP_ID}")
+      bundle = Spaceship::ConnectAPI::BundleId.create(name: "Uzmini Cenu", platform: "IOS", identifier: APP_ID)
+    end
+    existing_caps = bundle.get_capabilities.map(&:capability_type)
+    { "PUSH_NOTIFICATIONS" => nil, "ASSOCIATED_DOMAINS" => nil }.each_key do |cap|
+      next if existing_caps.include?(cap)
+      UI.message("Enabling #{cap}")
+      bundle.create_capability(cap)
+    end
+    app = Spaceship::ConnectAPI::App.find(APP_ID)
+    unless app
+      UI.message("Creating App Store Connect app record")
+      app = Spaceship::ConnectAPI::App.create(name: APP_NAME, version_string: "0.1.0", sku: "uzmini-cenu-ios",
+                                              primary_locale: "en-US", bundle_id: APP_ID, platforms: ["IOS"])
+    end
+    UI.success("App record ready: #{app.name} (#{app.id})")
 
     # Distribution certificate. The private key of any cert created elsewhere (e.g. by Expo) is not
     # on this runner, so `cert` creates a fresh "Apple Distribution" cert when none is usable.
