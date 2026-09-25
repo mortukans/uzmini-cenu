@@ -5,6 +5,9 @@
 #   ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (contents of the .p8), APPLE_TEAM_ID
 # The Xcode project is generated on the runner by `npx expo prebuild` before this runs.
 
+require "date"
+require "base64"
+
 default_platform(:ios)
 
 APP_ID   = "lv.uzminicenu.app"
@@ -45,11 +48,29 @@ platform :ios do
     UI.user_error!("No App Store Connect app for #{APP_ID}. Create it in App Store Connect → My Apps → + (bundle id #{APP_ID}).") unless app
     UI.success("App record ready: #{app.name} (#{app.id})")
 
-    # Distribution certificate. The private key of any cert created elsewhere (e.g. by Expo) is not
-    # on this runner, so `cert` creates a fresh "Apple Distribution" cert when none is usable.
-    # Apple allows up to 3 distribution certs per team, so this is fine.
-    cert(api_key: api_key, team_id: ENV.fetch("APPLE_TEAM_ID"), generate_apple_certs: true, force: false,
-         keychain_path: File.expand_path("~/Library/Keychains/fastlane_tmp_keychain-db"), keychain_password: "")
+    # Distribution certificate. Runners are ephemeral, so the private key must be persisted:
+    #  - if DIST_CERT_P12 (base64 .p12, no password) is set as a secret → import it;
+    #  - else revoke certs created by earlier CI runs today, create one, and export its .p12 to
+    #    fastlane/certs/ (kept as a workflow artifact → store as the DIST_CERT_P12 secret).
+    if ENV["DIST_CERT_P12"].to_s.strip.empty?
+      today_plus_year = (Date.today >> 12)
+      Spaceship::ConnectAPI::Certificate.all(filter: { certificateType: "DISTRIBUTION" }).each do |c|
+        exp = Date.parse(c.expiration_date) rescue nil
+        next unless exp && (exp - today_plus_year).abs <= 1  # created today (Apple: +365 d)
+        UI.important("Revoking throwaway CI certificate #{c.id} (expires #{exp})")
+        c.delete!
+      end
+      cert(api_key: api_key, team_id: ENV.fetch("APPLE_TEAM_ID"), generate_apple_certs: true, force: true,
+           output_path: "fastlane/certs",
+           keychain_path: File.expand_path("~/Library/Keychains/fastlane_tmp_keychain-db"), keychain_password: "")
+      UI.important("Exported fastlane/certs/*.p12 — base64 it into the DIST_CERT_P12 secret so future runs reuse it")
+    else
+      p12 = File.expand_path("dist.p12")
+      File.binwrite(p12, Base64.decode64(ENV["DIST_CERT_P12"]))
+      import_certificate(certificate_path: p12, certificate_password: "",
+                         keychain_path: File.expand_path("~/Library/Keychains/fastlane_tmp_keychain-db"), keychain_password: "")
+    end
+
     # App Store provisioning profile for the bundle id.
     sigh(api_key: api_key, app_identifier: APP_ID, team_id: ENV.fetch("APPLE_TEAM_ID"), force: true)
 

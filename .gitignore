@@ -57,3 +57,4 @@ fastlane/*.p12
 build/
 .secrets/
 scraper/test/fixtures/*/
+fastlane/certs/

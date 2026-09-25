@@ -25,6 +25,7 @@ jobs:
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      DIST_CERT_P12: ${{ secrets.DIST_CERT_P12 }}
       BUILD_NUMBER: ${{ github.run_number }}
       FASTLANE_SKIP_UPDATE_CHECK: '1'
       LC_ALL: en_US.UTF-8
@@ -72,5 +73,6 @@ jobs:
           name: build-output
           path: |
             build/*.ipa
+            fastlane/certs/*
             ~/Library/Logs/gym/*.log
           if-no-files-found: ignore
