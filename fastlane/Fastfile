@@ -48,7 +48,8 @@ platform :ios do
     # Distribution certificate. The private key of any cert created elsewhere (e.g. by Expo) is not
     # on this runner, so `cert` creates a fresh "Apple Distribution" cert when none is usable.
     # Apple allows up to 3 distribution certs per team, so this is fine.
-    cert(api_key: api_key, team_id: ENV.fetch("APPLE_TEAM_ID"), generate_apple_certs: true, force: false)
+    cert(api_key: api_key, team_id: ENV.fetch("APPLE_TEAM_ID"), generate_apple_certs: true, force: false,
+         keychain_path: File.expand_path("~/Library/Keychains/fastlane_tmp_keychain-db"), keychain_password: "")
     # App Store provisioning profile for the bundle id.
     sigh(api_key: api_key, app_identifier: APP_ID, team_id: ENV.fetch("APPLE_TEAM_ID"), force: true)
 
