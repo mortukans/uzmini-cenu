@@ -58,3 +58,4 @@ build/
 .secrets/
 scraper/test/fixtures/*/
 fastlane/certs/
+scraper/.env
