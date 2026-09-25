@@ -67,7 +67,7 @@ platform :ios do
     else
       p12 = File.expand_path("dist.p12")
       File.binwrite(p12, Base64.decode64(ENV["DIST_CERT_P12"]))
-      import_certificate(certificate_path: p12, certificate_password: "",
+      import_certificate(certificate_path: p12, certificate_password: ENV.fetch("DIST_CERT_PASSWORD"),
                          keychain_path: File.expand_path("~/Library/Keychains/fastlane_tmp_keychain-db"), keychain_password: "")
     end
 
