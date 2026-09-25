@@ -2,14 +2,13 @@ name: Nightly SS.com scrape
 
 on:
   schedule:
-    - cron: '30 22 * * *'   # 01:30 Europe/Riga (summer) — before build-daily at 23:30 UTC? see note below
+    - cron: '0 18 * * *'   # 21:00 Riga, two hours before build-daily (20:00 UTC)
   workflow_dispatch:
     inputs:
       limit:
         description: 'max detail pages'
         default: '900'
 
-# Note: build-daily's pg_cron runs at 23:30 UTC; this scrape at 22:30 UTC finishes first.
 
 jobs:
   scrape:
