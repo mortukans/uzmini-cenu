@@ -125,6 +125,11 @@ Deno.serve(async (req) => {
       warnings.push(`daily_pool_thin:${cat}:${pool.length}`);
       pool = await load(relaxedBefore);
     }
+    if (pool.length < 5) {
+      // last resort (young pool, e.g. right after launch): anything active
+      warnings.push(`daily_pool_young:${cat}:${pool.length}`);
+      pool = await load(new Date(nowMs + 60_000).toISOString());
+    }
     if (cat === 'flats') {
       const first = chosen.find((c) => c.category === 'flats');
       if (first) {

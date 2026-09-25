@@ -1,0 +1,31 @@
+name: Nightly SS.com scrape
+
+on:
+  schedule:
+    - cron: '30 22 * * *'   # 01:30 Europe/Riga (summer) — before build-daily at 23:30 UTC? see note below
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'max detail pages'
+        default: '900'
+
+# Note: build-daily's pg_cron runs at 23:30 UTC; this scrape at 22:30 UTC finishes first.
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SUPABASE_URL: https://szlqqshbuswezepvnzsb.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SCRAPER_MAILTO: mortukans@gmail.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: cd scraper && npm ci
+      - name: Scrape
+        run: cd scraper && npx tsx src/index.ts run --limit ${{ github.event.inputs.limit || '900' }}
+      - name: Stats
+        if: always()
+        run: cd scraper && npx tsx src/index.ts stats
