@@ -38,7 +38,7 @@ platform :ios do
       bundle = Spaceship::ConnectAPI::BundleId.create(name: "Uzmini Cenu", platform: "IOS", identifier: APP_ID)
     end
     existing_caps = bundle.get_capabilities.map(&:capability_type)
-    { "PUSH_NOTIFICATIONS" => nil, "ASSOCIATED_DOMAINS" => nil, "SIGN_IN_WITH_APPLE" => nil }.each_key do |cap|
+    { "PUSH_NOTIFICATIONS" => nil, "ASSOCIATED_DOMAINS" => nil, "APPLE_ID_AUTH" => nil }.each_key do |cap|
       next if existing_caps.include?(cap)
       UI.message("Enabling #{cap}")
       bundle.create_capability(cap)
