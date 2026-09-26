@@ -1,5 +1,20 @@
 # 08 Roadmap
 
+## Status snapshot — 2026-09-26
+
+Built in one day (2026-09-25) instead of 11 weeks; the plan below is kept as the reference, this block is the truth.
+
+| Phase | Done | Not done / changed |
+|-------|------|--------------------|
+| 0 De-risk | P0.1 probe, P0.4 Apple account, P0.7 repo/Expo/Supabase | P0.2 City24 probe, P0.3 partnership emails, P0.5 domain (using GitHub Pages instead of uzminicenu.lv), P0.6 lawyer |
+| 1 Data + solo | P1.1–P1.10 all done; scraper runs nightly on GitHub Actions | P1.11 scoring playtest with 5 people (k=8 unvalidated) |
+| 2 Daily + accounts | P2.1 (anonymous + username; Apple sign-in dropped by decision), P2.2–P2.4, P2.6, P2.8 | P2.5 universal links need the domain (custom scheme works, GitHub Pages fallback), P2.7 PostHog/Sentry code present but keys unset, P2.9 friends test |
+| 3 Duel | P3.1–P3.8 code complete, smoke-tested via RPC and web | never tested on two real phones |
+| 4 Monetization + polish | P4.4 onboarding, P4.5 icon/screenshots/privacy labels, P4.6 settings | P4.1 ads and P4.3 RevenueCat dropped (free app decision); P4.2 hints partial (bracket hint disabled); P4.7/P4.8 beta with 30 testers skipped |
+| 5 Launch | P5.1 submitted (build 21, awaiting reply to Guideline 2.1 info request), P5.2 site live | P5.3 press kit, P5.4 launch week, P5.5 monitoring (no Sentry/PostHog keys) |
+| 6 v1.1 | P6.1 party rooms already built | P6.2–P6.6 |
+
+
 Solo dev, evenings and weekends, budget ~15 h/week. Estimates are working
 hours (h); phase lengths are calendar weeks at that pace. Total to launch:
 ~165 h over 11 weeks, week 12 is buffer.
