@@ -56,7 +56,19 @@
     "done_eyebrow": "Treniņš pabeigts",
     "started_with": "Tu sāki ar {{n}} punktiem",
     "done_body": "Dienas izaicinājums ir viens visiem — salīdzini ar draugiem.",
-    "start": "Sākt"
+    "start": "Sākt",
+    "next": "Tālāk",
+    "s1_title": "Uzmini Cenu",
+    "s2_title": "Kā spēlēt",
+    "s2_body": "Skaties foto, ievadi cenu, dabū punktus pēc tā, cik tuvu trāpīji.",
+    "s2_photo": "Foto",
+    "s2_guess": "Minējums",
+    "s2_points": "Punkti",
+    "s3_title": "Katru dienu. Ar draugiem.",
+    "s3_daily": "Dienas izaicinājums — 5 kārtas, vienādas visiem.",
+    "s3_duel": "Dueļi un istabas — izaicini draugus reālajā laikā.",
+    "s4_title": "Saglabā progresu",
+    "s4_body": "Pēc izvēles: piesaisti Apple vai Google, lai rezultāti un draugi saglabātos. Var arī bez konta."
   },
   "round": {
     "guess_cta": "Uzmini!",
@@ -180,7 +192,30 @@
     "username_banner": "Izvēlies lietotājvārdu, lai parādītos tabulā"
   },
   "auth": {
-    "pick_username": "Izvēlēties lietotājvārdu"
+    "pick_username": "Izvēlēties lietotājvārdu",
+    "save_progress": "Saglabā progresu",
+    "save_progress_body": "Piesaisti kontu, lai rezultāti, sērijas un draugi saglabātos, mainot telefonu.",
+    "restore_divider": "vai atjauno esošu kontu",
+    "continue_without": "Turpināt bez konta",
+    "apple": "Turpināt ar Apple",
+    "google": "Turpināt ar Google",
+    "linked_title": "Progress saglabāts",
+    "linked_body": "Tavs konts tagad ir piesaistīts. Vari ienākt no jebkuras ierīces.",
+    "restored_title": "Konts atjaunots",
+    "restored_body": "Tavi iepriekšējie rezultāti un draugi ir atpakaļ.",
+    "account": "Konts",
+    "account_linked": "Piesaistīts: {{providers}}",
+    "account_not_linked": "Konts ir tikai šajā ierīcē. Piesaisti Apple vai Google, lai neko nepazaudētu.",
+    "sign_out": "Iziet",
+    "sign_out_title": "Iziet no konta?",
+    "sign_out_body": "Šajā ierīcē tiks izveidots jauns tukšs konts. Ienāc vēlreiz ar Apple vai Google, lai atgrieztos.",
+    "err": {
+      "merge_expired": "Piesaistes laiks beidzās. Mēģini vēlreiz.",
+      "provider_no_token": "Nevarēja saņemt pieteikšanās datus.",
+      "provider_unavailable": "Šī pieteikšanās šeit nav pieejama.",
+      "not_linked": "Pieteikšanās neizdevās.",
+      "unknown": "Nevarēja piesaistīt kontu. Mēģini vēlreiz."
+    }
   },
   "profile": {
     "username": "Lietotājvārds",

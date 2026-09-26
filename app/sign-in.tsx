@@ -1,7 +1,9 @@
 /**
  * /sign-in modal: "choose a username" (route name kept for existing navigation).
  * Live validation → setUsername RPC → resolveSignIn(true) and close.
- * Depends on: src/auth/apple (resolveSignIn), src/auth/store, src/api/rpc.setUsername, i18n social.
+ * Below the field: "or restore an existing account" + Apple/Google (ProviderButtons);
+ * a restored account with a username closes the modal via the hasUsername effect.
+ * Depends on: src/auth/apple (resolveSignIn), src/auth/store, src/api/rpc.setUsername, i18n social + common.auth.
  */
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
@@ -10,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { resolveSignIn } from '../src/auth/apple';
 import { isAutoUsername, useAuth } from '../src/auth/store';
 import { RpcError, setUsername } from '../src/api/rpc';
+import { ProviderButtons, useProvidersAvailable } from '../src/ui/components';
 import { colors, radius, spacing, type } from '../src/ui/theme';
 
 const USERNAME_RE = /^[a-z0-9_]{3,16}$/;
@@ -18,6 +21,8 @@ type NameStatus = 'idle' | 'ok' | 'taken' | 'invalid';
 
 export default function ChooseUsernameScreen() {
   const { t } = useTranslation('social');
+  const { t: tc } = useTranslation('common');
+  const providers = useProvidersAvailable();
   const { profile, hasUsername, refreshProfile } = useAuth();
   const [name, setName] = useState(hasUsername ? profile?.username ?? '' : '');
   const [status, setStatus] = useState<NameStatus>('idle');
@@ -102,6 +107,17 @@ export default function ChooseUsernameScreen() {
       <Text style={[type.small, { color: bad ? colors.red : colors.textMuted }]}>{hint}</Text>
       {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
       <Text style={[type.small, { color: colors.textMuted }]}>{t('signIn.privacy')}</Text>
+
+      {providers.any && (
+        <View style={{ gap: spacing.md, marginTop: spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+            <Text style={[type.small, { color: colors.textMuted }]}>{tc('auth.restore_divider')}</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+          </View>
+          <ProviderButtons onDone={(r) => { if (r === 'restored' && useAuth.getState().hasUsername) close(true); }} />
+        </View>
+      )}
 
       <View style={{ flex: 1 }} />
       <Pressable

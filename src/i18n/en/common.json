@@ -56,7 +56,19 @@
     "done_eyebrow": "Practice done",
     "started_with": "You started with {{n}} points",
     "done_body": "The daily challenge is the same for everyone. Compare with friends.",
-    "start": "Start"
+    "start": "Start",
+    "next": "Next",
+    "s1_title": "Uzmini Cenu",
+    "s2_title": "How to play",
+    "s2_body": "Look at the photo, enter a price, score points for how close you are.",
+    "s2_photo": "Photo",
+    "s2_guess": "Guess",
+    "s2_points": "Points",
+    "s3_title": "Every day. With friends.",
+    "s3_daily": "Daily challenge: 5 rounds, the same for everyone.",
+    "s3_duel": "Duels and rooms: challenge friends in real time.",
+    "s4_title": "Save your progress",
+    "s4_body": "Optional: link Apple or Google so results and friends are kept. Works without an account too."
   },
   "round": {
     "guess_cta": "Guess!",
@@ -180,7 +192,30 @@
     "username_banner": "Pick a username to appear on the board"
   },
   "auth": {
-    "pick_username": "Pick a username"
+    "pick_username": "Pick a username",
+    "save_progress": "Save your progress",
+    "save_progress_body": "Link an account so your results, streaks and friends survive a new phone.",
+    "restore_divider": "or restore an existing account",
+    "continue_without": "Continue without an account",
+    "apple": "Continue with Apple",
+    "google": "Continue with Google",
+    "linked_title": "Progress saved",
+    "linked_body": "Your account is linked. You can sign in from any device.",
+    "restored_title": "Account restored",
+    "restored_body": "Your previous results and friends are back.",
+    "account": "Account",
+    "account_linked": "Linked: {{providers}}",
+    "account_not_linked": "This account lives only on this device. Link Apple or Google so nothing gets lost.",
+    "sign_out": "Sign out",
+    "sign_out_title": "Sign out?",
+    "sign_out_body": "A new empty account will be created on this device. Sign in again with Apple or Google to come back.",
+    "err": {
+      "merge_expired": "The link request expired. Try again.",
+      "provider_no_token": "Could not get sign-in data.",
+      "provider_unavailable": "This sign-in is not available here.",
+      "not_linked": "Sign-in failed.",
+      "unknown": "Could not link the account. Try again."
+    }
   },
   "profile": {
     "username": "Username",

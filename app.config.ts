@@ -2,6 +2,8 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 const BUNDLE_ID = 'lv.uzminicenu.app';
 const LINK_HOST = process.env.EXPO_PUBLIC_UNIVERSAL_LINK_HOST ?? 'uzminicenu.lv';
+// Reversed Google iOS client id. Empty → the Google Sign-In plugin is omitted (it throws on a missing scheme).
+const GOOGLE_IOS_URL_SCHEME = (process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME ?? '').trim();
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -15,6 +17,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: BUNDLE_ID,
     supportsTablet: false,
+    usesAppleSignIn: true,
     associatedDomains: [`applinks:${LINK_HOST}`],
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
@@ -48,6 +51,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-localization',
     ['expo-splash-screen', { backgroundColor: '#0F1115', image: './assets/splash-icon.png', imageWidth: 180 }],
     ['expo-notifications', { color: '#F5B840' }],
+    'expo-apple-authentication',
+    // The Google plugin throws without a valid reversed client id → omit it when unset.
+    ...(GOOGLE_IOS_URL_SCHEME.startsWith('com.googleusercontent.apps.')
+      ? [['@react-native-google-signin/google-signin', { iosUrlScheme: GOOGLE_IOS_URL_SCHEME }] as [string, object]]
+      : []),
     ...(process.env.EXPO_PUBLIC_SENTRY_DSN
       ? [['@sentry/react-native/expo', { organization: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT }] as [string, object]]
       : []),

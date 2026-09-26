@@ -14,6 +14,11 @@ const schema = z.object({
   ADMOB_REWARDED_ID: z.string().optional(),
   ADS_ENABLED: z.coerce.boolean().default(false),
   UNIVERSAL_LINK_HOST: z.string().default('uzminicenu.lv'),
+  /** Google Sign-In (optional; the Google button is hidden when WEB_CLIENT_ID is missing). */
+  GOOGLE_WEB_CLIENT_ID: z.string().optional(),
+  GOOGLE_IOS_CLIENT_ID: z.string().optional(),
+  /** Reversed iOS client id (com.googleusercontent.apps.xxx); consumed by app.config.ts. */
+  GOOGLE_IOS_URL_SCHEME: z.string().optional(),
 });
 
 const parsed = schema.safeParse({
@@ -26,6 +31,9 @@ const parsed = schema.safeParse({
   ADMOB_REWARDED_ID: process.env.EXPO_PUBLIC_ADMOB_REWARDED_ID || undefined,
   ADS_ENABLED: process.env.EXPO_PUBLIC_ADS_ENABLED === 'true',
   UNIVERSAL_LINK_HOST: process.env.EXPO_PUBLIC_UNIVERSAL_LINK_HOST || undefined,
+  GOOGLE_WEB_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || undefined,
+  GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined,
+  GOOGLE_IOS_URL_SCHEME: process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME || undefined,
 });
 
 if (!parsed.success) {

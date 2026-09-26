@@ -92,10 +92,13 @@ export async function getRoomPlayers(code: string): Promise<RoomPlayer[]> {
 
 // ─── profiles / friends ──────────────────────────────────────────────────────
 
+/** Column list: profiles.merge_token* are not selectable (migration 22), so never `select('*')`. */
+const PROFILE_COLS = 'id, username, avatar, lang, is_premium, created_at';
+
 export async function getMyProfile(): Promise<Profile | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+  const { data, error } = await supabase.from('profiles').select(PROFILE_COLS).eq('id', user.id).single();
   if (error) throw new RpcError(error.message);
   return data as Profile;
 }
@@ -109,7 +112,7 @@ export async function updateProfile(patch: Partial<Pick<Profile, 'avatar' | 'lan
 export const setUsername = (username: string) =>
   call<{ username: string }>('set_username', { p_username: username.trim().toLowerCase() });
 export async function searchProfiles(q: string): Promise<Profile[]> {
-  const { data, error } = await supabase.from('profiles').select('id, username, avatar, lang, is_premium, created_at')
+  const { data, error } = await supabase.from('profiles').select(PROFILE_COLS)
     .ilike('username', `%${q}%`).limit(20);
   if (error) throw new RpcError(error.message);
   return (data ?? []) as Profile[];
@@ -123,6 +126,13 @@ export const listFriends = () =>
 export const registerPushToken = (token: string, platform: 'ios' | 'android' = 'ios') =>
   call<void>('register_push_token', { p_token: token, p_platform: platform });
 export const deleteMe = () => call<void>('delete_me');
+
+// ─── identity linking (migration 22) ─────────────────────────────────────────
+/** Anonymous user only: one-time token (10 min) that claim_merge() redeems after signInWithIdToken. */
+export const prepareMerge = () => call<string>('prepare_merge');
+/** Provider user: move the anonymous account's data onto the caller (or just drop it when the caller already exists). */
+export const claimMerge = (token: string) =>
+  call<{ merged: boolean; restored: boolean }>('claim_merge', { p_token: token });
 
 export async function getCategories(): Promise<CategoryMeta[]> {
   const { data, error } = await supabase.from('categories').select('*');

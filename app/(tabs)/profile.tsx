@@ -12,7 +12,7 @@ import { clearAll, getDailyStreak, getHintTokens, getPrefs, getStreakBests, setO
 import { SUPPORTED, currentLang, setLang } from '../../src/i18n';
 import { analyticsReset, screenView, track } from '../../src/analytics';
 import { haptic, setHapticsEnabled } from '../../src/ui/haptics';
-import { Button, Screen } from '../../src/ui/components';
+import { Button, ProviderButtons, Screen, useProvidersAvailable } from '../../src/ui/components';
 import { colors, radius, spacing, type } from '../../src/ui/theme';
 
 const TAKEDOWN_EMAIL = `takedown@${env.UNIVERSAL_LINK_HOST}`;
@@ -20,7 +20,8 @@ const USERNAME_RE = /^[a-z0-9_]{3,16}$/;
 
 export default function ProfileScreen() {
   const { t } = useTranslation();
-  const { profile, hasUsername, refreshProfile, signOut } = useAuth();
+  const { profile, hasUsername, refreshProfile, signOut, identities, isLinked } = useAuth();
+  const providers = useProvidersAvailable();
   const [lang, setLangState] = useState<Lang>(currentLang());
   const [haptics, setHaptics] = useState(true);
   const [username, setUsername] = useState(profile?.username ?? '');
@@ -72,6 +73,13 @@ export default function ProfileScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const confirmSignOut = () => {
+    Alert.alert(t('auth.sign_out_title'), t('auth.sign_out_body'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('auth.sign_out'), style: 'destructive', onPress: async () => { track('sign_out'); await signOut(); } },
+    ]);
   };
 
   const replayOnboarding = async () => { await setOnboarded(false); router.replace('/onboarding'); };
@@ -148,6 +156,26 @@ export default function ProfileScreen() {
           </Pressable>
         )}
       </View>
+
+      {/* Account: linked providers, or the link buttons (nothing is required) */}
+      {(isLinked || providers.any) && (
+        <>
+          <Text style={styles.section}>{t('auth.account')}</Text>
+          <View style={styles.card}>
+            {isLinked ? (
+              <>
+                <Row label={t('auth.account_linked', { providers: identities.filter((i) => i.provider === 'apple' || i.provider === 'google').map((i) => i.provider === 'apple' ? 'Apple' : 'Google').join(', ') })} />
+                <Row label={t('auth.sign_out')} onPress={confirmSignOut} />
+              </>
+            ) : (
+              <View style={{ padding: spacing.md, gap: spacing.md }}>
+                <Text style={styles.muted}>{t('auth.account_not_linked')}</Text>
+                <ProviderButtons />
+              </View>
+            )}
+          </View>
+        </>
+      )}
 
       {/* Stats */}
       <Text style={styles.section}>{t('profile.stats')}</Text>

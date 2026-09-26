@@ -20,6 +20,11 @@ jobs:
       EXPO_PUBLIC_UNIVERSAL_LINK_HOST: uzminicenu.lv
       EXPO_PUBLIC_ADS_ENABLED: 'false'
       EAS_PROJECT_ID: c5390816-5979-4f90-81b8-d15b5e63f401
+      # Google Sign-In (GitHub secrets; leave them unset to ship without the Google button —
+      # app.config.ts omits the plugin when the URL scheme is empty)
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+      EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME: ${{ secrets.GOOGLE_IOS_URL_SCHEME }}
       # Apple (GitHub secrets)
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
