@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Constants from 'expo-constants';
 import { deleteMe, setUsername as saveUsernameRpc, updateProfile, RpcError } from '../../src/api/rpc';
 import type { Lang } from '../../src/api/types';
+import { describeIdentities } from '../../src/auth/providers';
 import { isAutoUsername, useAuth } from '../../src/auth/store';
 import { env, isConfigured } from '../../src/env';
 import { clearAll, getDailyStreak, getHintTokens, getPrefs, getStreakBests, setOnboarded, setPrefs, type StreakBests } from '../../src/game/storage';
@@ -108,6 +109,8 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const linked = isLinked ? describeIdentities(identities) : null;
+
   const Row = ({ label, value, onPress, danger }: { label: string; value?: string; onPress?: () => void; danger?: boolean }) => (
     <Pressable onPress={onPress} disabled={!onPress} style={styles.row} accessibilityRole={onPress ? 'button' : 'text'}>
       <Text style={[styles.rowLabel, danger && { color: colors.red }]}>{label}</Text>
@@ -162,9 +165,15 @@ export default function ProfileScreen() {
         <>
           <Text style={styles.section}>{t('auth.account')}</Text>
           <View style={styles.card}>
-            {isLinked ? (
+            {linked ? (
               <>
-                <Row label={t('auth.account_linked', { providers: identities.filter((i) => i.provider === 'apple' || i.provider === 'google').map((i) => i.provider === 'apple' ? 'Apple' : 'Google').join(', ') })} />
+                {/* "Linked: Apple, Google" + the e-mail Supabase knows for it (if any) */}
+                <View style={styles.row} accessibilityRole="text">
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.rowLabel}>{t('auth.account_linked', { providers: linked.providers.join(', ') })}</Text>
+                    {linked.email ? <Text style={styles.muted} numberOfLines={1}>{linked.email}</Text> : null}
+                  </View>
+                </View>
                 <Row label={t('auth.sign_out')} onPress={confirmSignOut} />
               </>
             ) : (

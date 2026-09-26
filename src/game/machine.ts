@@ -16,6 +16,8 @@ export const MAX_SKIPS = 2;
 export const SOLO_ROUNDS = 10;
 export const DAILY_ROUNDS = 5;
 export const STAGED_TIMEOUT_MS = 2000;
+/** LOADING may never hang silently: after this the store surfaces ERROR ('timeout') with Retry. */
+export const LOADING_TIMEOUT_MS = 15000;
 export const REVEAL_ANIM_MS = 1200;
 
 export interface SessionConfig {
@@ -103,6 +105,15 @@ export const initialState: SessionState = {
 export type Action =
   | { type: 'START'; config: SessionConfig; rounds?: Round[]; streak?: number; outcomes?: Outcome[] }
   | { type: 'ROUNDS_LOADED'; rounds: Round[] }
+  /**
+   * Replace the queue of unplayed rounds with freshly issued ones (tokens were
+   * re-issued: auth user changed mid-session, bad_token/token_expired). Score,
+   * roundNo, streak and skips are kept. A round whose outcome is pending
+   * (SUBMITTING / WAITING_OTHERS / REVEALING / REVEALED) stays at index 0.
+   */
+  | { type: 'ROUNDS_REPLACED'; rounds: Round[] }
+  /** Drop the current round without scoring or counting a skip (bad token, inconsistent state). */
+  | { type: 'DISCARD_ROUND' }
   | { type: 'LOAD_FAILED'; error: string }
   | { type: 'PHOTO_READY' }
   | { type: 'SUBMIT'; guess: number; timeMs: number }
@@ -165,11 +176,33 @@ export function reduce(s: SessionState, a: Action): SessionState {
       const fresh = a.rounds.filter((r) => !seen.has(r.id));
       const rounds = [...s.rounds, ...fresh];
       const next = { ...s, rounds, servedIds: [...s.servedIds, ...fresh.map((r) => r.id)].slice(-200), error: null };
-      if (s.phase === 'LOADING') {
+      // A pool that arrives late (after the LOADING watchdog fired) still recovers the session.
+      if (s.phase === 'LOADING' || (s.phase === 'ERROR' && s.prevPhase === 'LOADING')) {
         if (rounds.length === 0) return { ...next, phase: 'ERROR', prevPhase: 'LOADING', error: 'empty_pool' };
-        return stage(next);
+        return stage({ ...next, prevPhase: null });
       }
       return next;
+    }
+
+    case 'ROUNDS_REPLACED': {
+      if (!s.config || s.phase === 'SUMMARY') return s;
+      const pending = s.phase === 'SUBMITTING' || s.phase === 'WAITING_OTHERS' || s.phase === 'REVEALING' || s.phase === 'REVEALED';
+      const current = pending ? s.rounds[0] : undefined;
+      const seen = new Set(s.outcomes.map((o) => o.round.id));
+      if (current) seen.add(current.id);
+      const fresh = a.rounds.filter((r) => !seen.has(r.id));
+      const rounds = current ? [current, ...fresh] : fresh;
+      const servedIds = [...s.servedIds, ...fresh.filter((r) => !s.servedIds.includes(r.id)).map((r) => r.id)].slice(-200);
+      const next: SessionState = { ...s, rounds, servedIds, error: null };
+      if (pending) return next;
+      // LOADING / STAGED / GUESSING / ERROR: the round on screen (if any) had a stale token → show a fresh one.
+      if (rounds.length === 0) return { ...next, phase: 'ERROR', prevPhase: 'LOADING', error: 'empty_pool' };
+      return stage({ ...next, prevPhase: null, lastOutcome: null });
+    }
+
+    case 'DISCARD_ROUND': {
+      if (!s.config || s.phase === 'LOADING' || s.phase === 'SUMMARY') return s;
+      return stage({ ...s, rounds: s.rounds.slice(1), prevPhase: null, lastOutcome: null, deadlineAt: null });
     }
 
     case 'LOAD_FAILED':

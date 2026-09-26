@@ -167,6 +167,83 @@ describe('session reducer', () => {
     expect(s.rounds.map((r) => r.id)).toEqual([1, 2, 3]);
   });
 
+  describe('re-issued tokens (auth user changed / bad_token)', () => {
+    const fresh = [round(11), round(12), round(13)];
+
+    it('ROUNDS_REPLACED while GUESSING swaps the round on screen for a fresh one and keeps the score', () => {
+      let s = reduce(initialState, { type: 'START', config: { ...solo, totalRounds: 5 }, rounds: [round(1), round(2), round(3)] });
+      s = playRound(s, 72000, 78500, 516);
+      s = reduce(s, { type: 'NEXT' });
+      s = reduce(s, { type: 'PHOTO_READY' });
+      expect(s.rounds[0].id).toBe(2);
+      s = reduce(s, { type: 'ROUNDS_REPLACED', rounds: fresh });
+      expect(s.phase).toBe('STAGED');
+      expect(s.rounds.map((r) => r.id)).toEqual([11, 12, 13]);
+      expect(s.roundNo).toBe(2);
+      expect(totalScore(s)).toBe(516);
+      expect(s.outcomes).toHaveLength(1);
+    });
+
+    it('ROUNDS_REPLACED while REVEALED keeps the revealed round, replaces the rest, NEXT stages a fresh one', () => {
+      let s = reduce(initialState, { type: 'START', config: { ...solo, totalRounds: 5 }, rounds: [round(1), round(2), round(3)] });
+      s = playRound(s, 72000, 78500, 516);
+      expect(s.phase).toBe('REVEALED');
+      s = reduce(s, { type: 'ROUNDS_REPLACED', rounds: [round(1), ...fresh] }); // server may re-serve #1: filtered
+      expect(s.phase).toBe('REVEALED');
+      expect(s.rounds.map((r) => r.id)).toEqual([1, 11, 12, 13]);
+      s = reduce(s, { type: 'NEXT' });
+      expect(s.phase).toBe('STAGED');
+      expect(s.rounds[0].id).toBe(11);
+      expect(s.roundNo).toBe(2);
+    });
+
+    it('ROUNDS_REPLACED while SUBMITTING keeps the pending round at index 0', () => {
+      let s = reduce(initialState, { type: 'START', config: solo, rounds: [round(1), round(2)] });
+      s = reduce(s, { type: 'PHOTO_READY' });
+      s = reduce(s, { type: 'SUBMIT', guess: 50000, timeMs: 0 });
+      s = reduce(s, { type: 'ROUNDS_REPLACED', rounds: fresh });
+      expect(s.phase).toBe('SUBMITTING');
+      expect(s.pendingGuess).toBe(50000);
+      expect(s.rounds.map((r) => r.id)).toEqual([1, 11, 12, 13]);
+    });
+
+    it('ROUNDS_REPLACED recovers LOADING and ERROR(load) states; is a no-op in SUMMARY', () => {
+      let s = reduce(initialState, { type: 'START', config: solo });
+      s = reduce(s, { type: 'LOAD_FAILED', error: 'timeout' });
+      expect(s.phase).toBe('ERROR');
+      s = reduce(s, { type: 'ROUNDS_REPLACED', rounds: fresh });
+      expect(s.phase).toBe('STAGED');
+      expect(s.error).toBeNull();
+      expect(reduce(reduce(initialState, { type: 'START', config: solo }), { type: 'ROUNDS_REPLACED', rounds: [] }).phase).toBe('ERROR');
+      const done = reduce(s, { type: 'END' });
+      expect(reduce(done, { type: 'ROUNDS_REPLACED', rounds: fresh })).toBe(done);
+    });
+
+    it('DISCARD_ROUND drops the current round without scoring or counting a skip', () => {
+      let s = reduce(initialState, { type: 'START', config: solo, rounds: [round(1), round(2)] });
+      s = reduce(s, { type: 'PHOTO_READY' });
+      s = reduce(s, { type: 'SUBMIT', guess: 50000, timeMs: 0 });
+      s = reduce(s, { type: 'DISCARD_ROUND' });
+      expect(s.phase).toBe('STAGED');
+      expect(s.rounds[0].id).toBe(2);
+      expect(s.roundNo).toBe(1);
+      expect(s.skipsUsed).toBe(0);
+      expect(s.outcomes).toHaveLength(0);
+      expect(s.pendingGuess).toBeNull();
+      s = reduce(s, { type: 'DISCARD_ROUND' });
+      expect(s.phase).toBe('LOADING'); // queue exhausted → the store refills
+      expect(reduce(s, { type: 'DISCARD_ROUND' })).toBe(s);
+    });
+
+    it('a pool arriving after the LOADING watchdog fired still stages the round', () => {
+      let s = reduce(initialState, { type: 'START', config: solo });
+      s = reduce(s, { type: 'LOAD_FAILED', error: 'timeout' });
+      s = reduce(s, { type: 'ROUNDS_LOADED', rounds: fresh });
+      expect(s.phase).toBe('STAGED');
+      expect(s.prevPhase).toBeNull();
+    });
+  });
+
   it('START with prior outcomes resumes at the right round number (daily resume)', () => {
     const daily: SessionConfig = { ...solo, mode: 'daily', totalRounds: 5, allowSkip: false, allowHints: false };
     const prior = [{ roundNo: 1, guess: 1, price: 1, score: 1000, rawScore: 1000, err: 0, cell: '🟩' as const, hints: [], timeMs: 0, sourceUrl: '', round: round(9) }];

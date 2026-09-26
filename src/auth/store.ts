@@ -30,6 +30,20 @@ interface AuthState {
   identities: UserIdentity[];
   /** Has an apple or google identity. */
   isLinked: boolean;
+  /**
+   * The last signInWith* call restored an existing provider account that
+   * already has a chosen username (nothing left to set up). Onboarding reads
+   * this to skip the remaining slides / practice and go straight home, then
+   * clears it. Reset at the start of every signInWith* call.
+   */
+  justRestored: boolean;
+  clearJustRestored: () => void;
+  /**
+   * Bootstrap / onAuthStateChange only touch *this* store (session, profile).
+   * They must never reset the game session or navigate: a link/restore can
+   * happen mid-round, and src/game/session re-issues its round tokens itself
+   * when auth.uid() changes.
+   */
   bootstrap: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   setSession: (s: Session | null) => void;
@@ -62,6 +76,8 @@ export const useAuth = create<AuthState>((set, get) => ({
   hasUsername: false,
   identities: [],
   isLinked: false,
+  justRestored: false,
+  clearJustRestored: () => set({ justRestored: false }),
 
   setSession: (session) => {
     const identities = identitiesOf(session);
@@ -83,6 +99,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
     if (!listening) {
       listening = true;
+      // Store-only side effects (see the AuthState doc): no game-session reset, no navigation.
       supabase.auth.onAuthStateChange((_e, s) => { get().setSession(s); if (s) void get().refreshProfile(); });
     }
     await get().refreshProfile();
@@ -97,24 +114,26 @@ export const useAuth = create<AuthState>((set, get) => ({
     } catch { /* offline: keep last */ }
   },
 
-  signInWithApple: async () => {
-    const r = await linkOrSignIn('apple');
-    await afterLink(get);
-    return r;
-  },
-
-  signInWithGoogle: async () => {
-    const r = await linkOrSignIn('google');
-    await afterLink(get);
-    return r;
-  },
+  signInWithApple: () => linkWith('apple', get, set),
+  signInWithGoogle: () => linkWith('google', get, set),
 
   signOut: async () => {
     await supabase.auth.signOut();
-    set({ profile: null, session: null, isAnonymous: true, hasUsername: false, identities: [], isLinked: false });
+    set({ profile: null, session: null, isAnonymous: true, hasUsername: false, identities: [], isLinked: false, justRestored: false });
     await get().bootstrap();
   },
 }));
+
+type Set = (patch: Partial<AuthState>) => void;
+
+/** linkOrSignIn + refresh; flags `justRestored` when an existing account with a username came back. */
+async function linkWith(provider: 'apple' | 'google', get: () => AuthState, set: Set): Promise<LinkResult> {
+  set({ justRestored: false });
+  const r = await linkOrSignIn(provider);
+  await afterLink(get);
+  set({ justRestored: r === 'restored' && get().hasUsername });
+  return r;
+}
 
 /** After signInWithIdToken + claim_merge: refresh the session (identities) and the merged profile. */
 async function afterLink(get: () => AuthState) {

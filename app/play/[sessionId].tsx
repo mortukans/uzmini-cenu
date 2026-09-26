@@ -14,9 +14,11 @@ import { formatEur } from '../../src/game/format';
 import { availableHints, type HintType, PHOTOS_BEFORE_HINT } from '../../src/game/hints';
 import { derivedValue } from '../../src/game/keypad';
 import { isLastRound, maxScore, parseSessionId, totalScore, type Outcome } from '../../src/game/machine';
+import { startPracticeSession } from '../../src/game/onboarding';
 import { sessionActions, useSession } from '../../src/game/session';
 import { getStreakBests, getStreakCurrent, isOnboarded, setOnboarded } from '../../src/game/storage';
 import { rigaDay } from '../../src/game/time';
+import { errorKeyFor, playViewFor } from '../../src/game/view';
 import { currentLang } from '../../src/i18n';
 import { adsAvailable, preloadInterstitial, preloadRewarded, shouldShowInterstitial, showInterstitial, showRewarded } from '../../src/monetization/ads';
 import { screenView, track } from '../../src/analytics';
@@ -47,7 +49,12 @@ export default function PlayScreen() {
   // Start (or reuse) the session for solo/streak/daily. Duel/room and onboarding are started elsewhere.
   useEffect(() => {
     screenView('play');
-    if (!sessionId || isOnboarding) return;
+    if (!sessionId) return;
+    if (isOnboarding) {
+      // Normally started by app/onboarding.tsx; a cold store (relaunch, hot reload) restarts the local practice set.
+      if (!useSession.getState().config) void startPracticeSession();
+      return;
+    }
     if (s.config?.sessionId === sessionId && s.phase !== 'SUMMARY') return;
     if (parsed.mode === 'duel' || parsed.mode === 'room') return;
     void (async () => {
@@ -98,10 +105,16 @@ export default function PlayScreen() {
     sessionActions.next();
   }, [mode, s.roundNo, isPremium, firstSession, isOnboarding]);
 
+  /** Leave the round screen. Onboarding practice is optional: closing it counts as done. */
+  const leave = () => {
+    if (mode === 'solo' || mode === 'streak') sessionActions.reset();
+    if (isOnboarding) { void setOnboarded(true); router.replace('/(tabs)'); return; }
+    if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
+  };
+
   const confirmClose = () => {
     const needsConfirm = mode === 'daily' || mode === 'duel' || mode === 'room';
-    const leave = () => { if (mode === 'solo' || mode === 'streak') sessionActions.reset(); router.back(); };
-    if (!needsConfirm || s.phase === 'SUMMARY') return leave();
+    if (!needsConfirm || s.phase === 'SUMMARY' || s.phase === 'ERROR') return leave();
     Alert.alert(t('round.leave_title'), t('round.leave_body'), [
       { text: t('common.cancel'), style: 'cancel' },
       { text: t('round.leave_confirm'), style: 'destructive', onPress: leave },
@@ -147,7 +160,10 @@ export default function PlayScreen() {
     ? t('round.round_of', { n: s.roundNo, total: cfg.totalRounds })
     : t('round.round_n', { n: s.roundNo });
 
-  if (s.phase === 'SUMMARY' && mode !== 'daily') {
+  // Exhaustive: every state renders one of these (src/game/view.ts), never a bare header.
+  const view = playViewFor(s);
+
+  if (view === 'summary' && mode !== 'daily') {
     return <Summary isOnboarding={isOnboarding} sessionId={sessionId ?? ''} />;
   }
 
@@ -166,7 +182,7 @@ export default function PlayScreen() {
 
       {s.offline && <View style={styles.banner}><Text style={styles.bannerText}>{t('common.offline_solo')}</Text></View>}
 
-      {(s.phase === 'LOADING' || !round) && s.phase !== 'ERROR' && (
+      {(view === 'skeleton' || view === 'summary') && (
         <View style={styles.body}>
           <Skeleton height={260} round={radius.lg} />
           <Skeleton width="60%" height={22} style={{ marginTop: spacing.lg }} />
@@ -174,15 +190,15 @@ export default function PlayScreen() {
         </View>
       )}
 
-      {s.phase === 'ERROR' && (
+      {view === 'error' && (
         <View style={[styles.body, styles.center]}>
-          <Text style={styles.errorTitle}>{s.error === 'empty_pool' ? t('round.empty_pool') : s.error === 'network' ? t('common.offline') : t('round.submit_failed')}</Text>
-          <Button title={t('common.retry')} onPress={() => sessionActions.retry()} style={styles.errorBtn} />
-          <Button title={t('common.back')} variant="ghost" onPress={() => { sessionActions.reset(); router.back(); }} />
+          <Text style={styles.errorTitle}>{t(errorKeyFor(s))}</Text>
+          <Button title={t('common.retry')} onPress={() => sessionActions.recover()} style={styles.errorBtn} />
+          <Button title={t('common.close')} variant="ghost" onPress={leave} />
         </View>
       )}
 
-      {round && (s.phase === 'STAGED' || s.phase === 'GUESSING' || s.phase === 'SUBMITTING') && (
+      {round && view === 'play' && (
         <View style={styles.playBody}>
           <ScrollView style={styles.top} contentContainerStyle={styles.topContent} bounces={false} alwaysBounceVertical={false} overScrollMode="never" showsVerticalScrollIndicator={false}>
             <PhotoCarousel
@@ -225,7 +241,7 @@ export default function PlayScreen() {
         </View>
       )}
 
-      {round && s.phase === 'WAITING_OTHERS' && (
+      {round && view === 'waiting' && (
         <View style={[styles.body, styles.center]}>
           <Text style={styles.asking}>{t('round.asking')}</Text>
           <Text style={styles.hiddenPrice}>▒▒▒▒▒ €</Text>
@@ -234,7 +250,7 @@ export default function PlayScreen() {
         </View>
       )}
 
-      {round && s.lastOutcome && (s.phase === 'REVEALING' || s.phase === 'REVEALED') && (
+      {round && s.lastOutcome && view === 'reveal' && (
         <ScrollView style={styles.top} contentContainerStyle={styles.revealContent} showsVerticalScrollIndicator={false}>
           <RevealCard
             outcome={s.lastOutcome}

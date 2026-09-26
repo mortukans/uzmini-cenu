@@ -1,15 +1,19 @@
 /**
  * /sign-in modal: "choose a username" (route name kept for existing navigation).
  * Live validation → setUsername RPC → resolveSignIn(true) and close.
- * Below the field: "or restore an existing account" + Apple/Google (ProviderButtons);
- * a restored account with a username closes the modal via the hasUsername effect.
- * Depends on: src/auth/apple (resolveSignIn), src/auth/store, src/api/rpc.setUsername, i18n social + common.auth.
+ * Below the field, only while the account is NOT linked yet: "or restore an
+ * existing account" + Apple/Google (ProviderButtons). A linked account shows a
+ * one-line "Linked: Apple" note instead. After a link / restore: the modal closes
+ * as soon as the profile has a username, otherwise the username field is focused.
+ * Depends on: src/auth/apple (resolveSignIn), src/auth/store, src/auth/providers (describeIdentities),
+ * src/api/rpc.setUsername, i18n social + common.auth.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { resolveSignIn } from '../src/auth/apple';
+import { describeIdentities } from '../src/auth/providers';
 import { isAutoUsername, useAuth } from '../src/auth/store';
 import { RpcError, setUsername } from '../src/api/rpc';
 import { ProviderButtons, useProvidersAvailable } from '../src/ui/components';
@@ -23,23 +27,31 @@ export default function ChooseUsernameScreen() {
   const { t } = useTranslation('social');
   const { t: tc } = useTranslation('common');
   const providers = useProvidersAvailable();
-  const { profile, hasUsername, refreshProfile } = useAuth();
+  const { profile, hasUsername, refreshProfile, isLinked, identities } = useAuth();
   const [name, setName] = useState(hasUsername ? profile?.username ?? '' : '');
   const [status, setStatus] = useState<NameStatus>('idle');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const input = useRef<TextInput>(null);
+  // The modal may be asked to close twice (hasUsername effect + ProviderButtons.onDone); pop the route once.
+  const closed = useRef(false);
 
   const close = (ok: boolean) => {
+    if (closed.current) return;
+    closed.current = true;
     resolveSignIn(ok);
     if (router.canGoBack()) router.back();
     else router.replace('/');
   };
 
-  // Username picked from elsewhere (or already had one when opened) → close.
+  // Username picked from elsewhere (or already had one when opened, or arrived
+  // with a restored profile) → close right away.
   useEffect(() => {
     if (hasUsername && !busy) close(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUsername]);
+
+  const linked = isLinked ? describeIdentities(identities) : null;
 
   const onChange = (v: string) => {
     const clean = v.toLowerCase().replace(/\s+/g, '');
@@ -88,6 +100,7 @@ export default function ChooseUsernameScreen() {
       </View>
 
       <TextInput
+        ref={input}
         value={name}
         onChangeText={onChange}
         onSubmitEditing={() => { void save(); }}
@@ -108,14 +121,24 @@ export default function ChooseUsernameScreen() {
       {error ? <Text style={{ color: colors.red }}>{error}</Text> : null}
       <Text style={[type.small, { color: colors.textMuted }]}>{t('signIn.privacy')}</Text>
 
-      {providers.any && (
+      {linked ? (
+        <Text style={[type.small, { color: colors.textMuted, marginTop: spacing.sm }]}>
+          {tc('auth.account_linked', { providers: linked.providers.join(', ') })}
+        </Text>
+      ) : providers.any && (
         <View style={{ gap: spacing.md, marginTop: spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
             <Text style={[type.small, { color: colors.textMuted }]}>{tc('auth.restore_divider')}</Text>
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
           </View>
-          <ProviderButtons onDone={(r) => { if (r === 'restored' && useAuth.getState().hasUsername) close(true); }} />
+          <ProviderButtons onDone={({ hasUsername: restoredHasUsername }) => {
+            // Restored / merged profile already has a name → done (the hasUsername
+            // effect usually got there first; close() is idempotent). Otherwise the
+            // user still has to pick one: put the caret back in the field.
+            if (restoredHasUsername) close(true);
+            else input.current?.focus();
+          }} />
         </View>
       )}
 

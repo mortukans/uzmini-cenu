@@ -1,29 +1,31 @@
 /**
  * Onboarding (docs/11 §2.1): 4-slide horizontal pager (paging ScrollView) with
- * dots + Skip, then the existing 3 practice rounds in the regular round screen.
+ * dots + Skip, then 3 optional practice rounds in the regular round screen.
  *   1 welcome (icon, pitch, language chips)   2 how to play (photo → guess → points)
  *   3 daily challenge + duels                  4 save your progress (ProviderButtons,
  *     "Continue without account" → practice rounds). Nothing requires an account.
- * Depends on: src/game/session, src/game/storage (setOnboarded/setPrefs), src/ui/components.
+ * Flow rules live in src/game/onboarding.ts: `onboarded` is persisted when the
+ * user leaves slide 4 (before practice); practice uses the bundled local set;
+ * a restored account with a username goes straight home. ProviderButtons calls
+ * `onDone` only after its "progress saved / account restored" alert has been
+ * dismissed, so navigation never happens underneath that alert.
+ * Depends on: src/game/onboarding, src/game/storage (setPrefs), src/ui/components.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { getRounds } from '../src/api/rpc';
 import type { Lang } from '../src/api/types';
-import { isConfigured } from '../src/env';
-import { ONBOARDING_SET } from '../src/game/onboardingSet';
-import { sessionActions } from '../src/game/session';
-import { setOnboarded, setPrefs } from '../src/game/storage';
+import type { LinkResult } from '../src/auth/providers';
+import { markOnboarded, nextAfterLink, startPracticeSession } from '../src/game/onboarding';
+import { setPrefs } from '../src/game/storage';
 import { SUPPORTED, currentLang, setLang } from '../src/i18n';
 import { screenView, track } from '../src/analytics';
 import { haptic } from '../src/ui/haptics';
 import { Button, ProviderButtons, Screen } from '../src/ui/components';
 import { colors, radius, spacing, type } from '../src/ui/theme';
 
-const LOAD_TIMEOUT_MS = 3000;
 const SLIDES = 4;
 
 export default function Onboarding() {
@@ -55,32 +57,35 @@ export default function Onboarding() {
     if (i !== page) { setPage(i); track('onboarding_slide', { index: i }); }
   };
 
-  /** Practice rounds (unchanged flow): server rounds, or the bundled set offline. */
+  /** Practice rounds: bundled local set, scored on device (persists `onboarded` first). */
   const startPractice = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      const rounds = isConfigured
-        ? await Promise.race([
-          getRounds('all', null, 3).catch(() => null),
-          new Promise<null>((r) => setTimeout(() => r(null), LOAD_TIMEOUT_MS)),
-        ])
-        : null;
-      if (rounds && rounds.length >= 3) {
-        await sessionActions.startSession({ mode: 'solo', category: 'all', rounds, totalRounds: 3, sessionId: 'onboarding' });
-      } else {
-        await sessionActions.startSession({ mode: 'solo', category: 'all', rounds: ONBOARDING_SET, totalRounds: 3, sessionId: 'onboarding', localScoring: true });
-      }
+      await startPracticeSession();
       router.replace('/play/onboarding');
     } finally {
       setBusy(false);
     }
   };
 
-  const skip = async () => {
-    await setOnboarded(true);
-    track('onboarding_complete', { total: 0, skipped: true });
+  const goHome = async () => {
+    await markOnboarded();
     router.replace('/(tabs)');
+  };
+
+  const skip = async () => {
+    track('onboarding_complete', { total: 0, skipped: true });
+    await goHome();
+  };
+
+  /**
+   * Link / restore finished. ProviderButtons calls this only after its
+   * "progress saved / account restored" alert was dismissed, so navigating
+   * here never puts that alert on top of a round.
+   */
+  const onLinked = ({ result }: { result: LinkResult }) => {
+    void (nextAfterLink(result) === 'home' ? goHome() : startPractice());
   };
 
   const last = page === SLIDES - 1;
@@ -145,7 +150,7 @@ export default function Onboarding() {
           <View style={styles.shield}><Text style={styles.shieldGlyph}>☁️</Text></View>
           <Text style={styles.h1}>{t('onboarding.s4_title')}</Text>
           <Text style={styles.body}>{t('onboarding.s4_body')}</Text>
-          <ProviderButtons style={styles.providers} onDone={() => { void startPractice(); }} />
+          <ProviderButtons style={styles.providers} onDone={onLinked} />
         </View>
       </ScrollView>
 

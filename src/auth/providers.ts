@@ -9,18 +9,41 @@
  *   signInWithIdToken(...)                    → session is now the provider user
  *   claim_merge(token) (as the provider user) → moves data / drops the anon user
  *
+ * After a merge / restore the *current UI language* is written to the profile
+ * (the user may have just picked it on the onboarding welcome slide); the
+ * profile's stored `lang` never silently switches the UI.
+ *
  * Both providers degrade gracefully: `googleConfigured` is false without the
  * EXPO_PUBLIC_GOOGLE_* env, `isAppleAvailable()` is false off iOS.
- * Depends on: src/api/supabase, src/api/rpc (prepareMerge, claimMerge), src/env.
+ * Depends on: src/api/supabase, src/api/rpc (prepareMerge, claimMerge, updateProfile), src/env, src/i18n (currentLang).
  */
 import { Platform } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
+import type { UserIdentity } from '@supabase/supabase-js';
 import { supabase } from '../api/supabase';
-import { RpcError, claimMerge, prepareMerge } from '../api/rpc';
+import { RpcError, claimMerge, prepareMerge, updateProfile } from '../api/rpc';
 import { env, isConfigured } from '../env';
+import { currentLang } from '../i18n';
 
 export type Provider = 'apple' | 'google';
+
+const PROVIDER_LABEL: Record<Provider, string> = { apple: 'Apple', google: 'Google' };
+export const isProvider = (p: string): p is Provider => p === 'apple' || p === 'google';
+
+/**
+ * Human-readable summary of the linked identities (Profile → Account, sign-in
+ * modal): provider labels in identity order + the first e-mail Supabase stored
+ * in identity_data (Apple may hand out a private-relay address; may be null).
+ */
+export function describeIdentities(identities: UserIdentity[]): { providers: string[]; email: string | null } {
+  const linked = identities.filter((i) => isProvider(i.provider));
+  const providers = linked.map((i) => PROVIDER_LABEL[i.provider as Provider]);
+  const email = linked
+    .map((i) => (i.identity_data as { email?: unknown } | undefined)?.email)
+    .find((e): e is string => typeof e === 'string' && e.length > 0) ?? null;
+  return { providers, email };
+}
 
 /** Outcome of linkOrSignIn(): what happened to the previous anonymous account. */
 export type LinkResult =
@@ -105,7 +128,16 @@ export async function linkOrSignIn(provider: Provider): Promise<LinkResult> {
   if (!before || newId === before.user.id) return 'unchanged';
 
   // 3. carry the anonymous data over (or drop it when the account already exists)
-  if (!mergeToken) return 'restored';
-  const r = await claimMerge(mergeToken);
-  return r.merged ? 'linked' : 'restored';
+  let result: LinkResult = 'restored';
+  if (mergeToken) {
+    const r = await claimMerge(mergeToken);
+    result = r.merged ? 'linked' : 'restored';
+  }
+
+  // 4. the language the user is looking at wins over the profile's stored one.
+  //    Must run before the store refreshes the profile (afterLink) so nothing
+  //    ever sees the stale `lang`. Best effort: offline just keeps it stale.
+  try { await updateProfile({ lang: currentLang() }); } catch { /* keep UI language; profile.lang stays stale */ }
+
+  return result;
 }

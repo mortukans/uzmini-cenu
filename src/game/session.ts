@@ -17,7 +17,7 @@ import { isConfigured } from '../env';
 import { score as localScore, gridCell } from './scoring';
 import { track } from '../analytics';
 import {
-  DAILY_ROUNDS, SOLO_ROUNDS, STAGED_TIMEOUT_MS, currentRound, initialState, reduce, totalScore,
+  DAILY_ROUNDS, LOADING_TIMEOUT_MS, SOLO_ROUNDS, STAGED_TIMEOUT_MS, currentRound, initialState, reduce, totalScore,
   type Action, type Outcome, type Phase, type SessionConfig, type SessionState,
 } from './machine';
 import { HINT_TOKEN_EVERY_HITS, MAX_HINT_TOKENS, hintsAllowed, type HintType } from './hints';
@@ -70,9 +70,22 @@ interface SessionStore extends SessionState {
 let opts: StartSessionOptions | null = null;
 let stagedTimer: ReturnType<typeof setTimeout> | null = null;
 let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
+let loadingTimer: ReturnType<typeof setTimeout> | null = null;
 let guessStartedAt = 0;
 let loading = false;
+let replacing = false;
 let generation = 0;
+/**
+ * auth.uid() the current pool's tokens were issued to. Round tokens embed the
+ * user id (submit_guess raises bad_token otherwise), so when the auth user
+ * changes mid-session (Apple/Google link or restore, sign-out) the unplayed
+ * rounds are re-fetched transparently — see onAuthUserChanged().
+ */
+let roundsUid: string | null = null;
+
+const currentUid = (): string | null => useAuth.getState().session?.user.id ?? null;
+/** Server-scored rounds fetched by this store (solo/streak/daily); social (onGuess) and bundled (localScoring) pools are never re-issued here. */
+const ownsTokens = () => Boolean(opts) && !opts?.localScoring && !opts?.onGuess;
 
 export const useSession = create<SessionStore>((set, get) => ({
   ...initialState,
@@ -130,6 +143,10 @@ async function afterTransition(prevPhase: Phase, s: SessionState) {
   // not depend on a phase *change*. ensurePool() dedupes concurrent calls.
   if (s.phase === 'LOADING') {
     void ensurePool();
+    armLoadingWatchdog(gen);
+  } else if (loadingTimer) {
+    clearTimeout(loadingTimer);
+    loadingTimer = null;
   }
 
   if (s.phase === 'STAGED' && prevPhase !== 'STAGED') {
@@ -173,17 +190,46 @@ async function afterTransition(prevPhase: Phase, s: SessionState) {
   }
 }
 
+/**
+ * LOADING must never sit on the skeleton forever (e.g. a pre-supplied pool ran
+ * dry, a request that never settles): surface ERROR with Retry / Close instead.
+ * A pool that arrives afterwards still recovers the session (ROUNDS_LOADED in
+ * ERROR/prevPhase LOADING re-stages).
+ */
+function armLoadingWatchdog(gen: number) {
+  if (loadingTimer) clearTimeout(loadingTimer);
+  loadingTimer = setTimeout(() => {
+    loadingTimer = null;
+    if (gen !== generation || useSession.getState().phase !== 'LOADING') return;
+    loading = false;
+    replacing = false;
+    dispatch({ type: 'LOAD_FAILED', error: 'timeout' });
+  }, LOADING_TIMEOUT_MS);
+}
+
 async function ensurePool() {
   const s = useSession.getState();
   const cfg = s.config;
-  if (!cfg || loading || opts?.rounds || opts?.localScoring) return;
+  if (!cfg || loading || replacing || opts?.localScoring || opts?.onGuess) return;
   if (cfg.mode !== 'solo' && cfg.mode !== 'streak') return;
+  // A pre-supplied pool is not topped up proactively, but an exhausted queue is
+  // recovered from the server rather than hanging in LOADING.
+  if (opts?.rounds && s.phase !== 'LOADING') return;
   if (s.rounds.length >= REFILL_BELOW && s.phase !== 'LOADING') return;
   loading = true;
   const gen = generation;
+  const uid = currentUid();
   try {
     const rounds = isConfigured ? await getRounds(cfg.category, cfg.region, POOL_SIZE) : [];
     if (gen !== generation) return;
+    if (uid !== currentUid()) {
+      // The auth user changed while the request was in flight: these tokens
+      // belong to the previous user. Drop them and fetch again as the new one.
+      loading = false;
+      void replacePool('auth_change');
+      return;
+    }
+    roundsUid = uid;
     dispatch({ type: 'ROUNDS_LOADED', rounds });
     useSession.setState({ offline: false });
   } catch (e) {
@@ -194,6 +240,78 @@ async function ensurePool() {
   } finally {
     if (gen === generation) loading = false;
   }
+}
+
+/**
+ * Re-issue every unplayed round (new tokens) while keeping score / roundNo /
+ * streak. Reasons: the auth user changed (tokens are bound to auth.uid()), or
+ * submit_guess said bad_token / token_expired (the whole batch is stale).
+ * Solo/streak: a fresh get_rounds pool. Daily: get_daily again and swap the
+ * remaining rounds for their re-tokenised twins (same listing ids).
+ */
+async function replacePool(reason: 'auth_change' | 'bad_token' | 'token_expired'): Promise<void> {
+  const s = useSession.getState();
+  const cfg = s.config;
+  if (!cfg || replacing || !ownsTokens() || s.phase === 'SUMMARY' || !isConfigured) return;
+  if (cfg.mode !== 'solo' && cfg.mode !== 'streak' && cfg.mode !== 'daily') return;
+  replacing = true;
+  const gen = generation;
+  const uid = currentUid();
+  try {
+    track('rounds_reissued', { mode: cfg.mode, reason, round_no: s.roundNo });
+    if (cfg.mode === 'daily') {
+      const set = await getDaily();
+      if (gen !== generation) return;
+      const meta: DailyMeta = { day: set.day, number: set.number, alreadyPlayed: set.already_played };
+      useSession.setState({ daily: meta });
+      if (set.already_played && set.result) {
+        // The (restored) account already played today: show its result.
+        useSession.setState({ dailySubmitted: { total: set.result.total, grid: set.result.grid, shareText: null, synced: true } });
+        dispatch({ type: 'END' });
+        return;
+      }
+      const byId = new Map(set.rounds.map((r) => [r.id, r] as const));
+      const queue = useSession.getState().rounds;
+      const swapped = queue.map((r) => byId.get(r.id)).filter((r): r is Round => Boolean(r));
+      roundsUid = uid;
+      dispatch({ type: 'ROUNDS_REPLACED', rounds: swapped.length ? swapped : set.rounds });
+    } else {
+      const rounds = await getRounds(cfg.category, cfg.region, POOL_SIZE);
+      if (gen !== generation) return;
+      roundsUid = uid;
+      dispatch({ type: 'ROUNDS_REPLACED', rounds });
+    }
+    useSession.setState({ offline: false });
+  } catch (e) {
+    if (gen !== generation) return;
+    const code = e instanceof RpcError ? e.code : 'network';
+    useSession.setState({ offline: code === 'network' });
+    // Only fatal while nothing is on screen; otherwise the next submit surfaces it.
+    dispatch({ type: 'LOAD_FAILED', error: code });
+  } finally {
+    if (gen === generation) replacing = false;
+  }
+}
+
+/**
+ * Called (via the useAuth subscription below) whenever auth.uid() changes:
+ * Apple/Google link or restore, sign-out → fresh anonymous account. Never
+ * resets the session or navigates; it only re-issues stale tokens.
+ */
+function onAuthUserChanged(uid: string | null) {
+  if (!uid || !roundsUid || roundsUid === uid) return;
+  if (!ownsTokens() || useSession.getState().phase === 'SUMMARY') return;
+  void replacePool('auth_change');
+}
+
+let knownUid: string | null = null;
+if (typeof useAuth.subscribe === 'function') {
+  useAuth.subscribe((st) => {
+    const uid = st.session?.user.id ?? null;
+    if (uid === knownUid) return;
+    knownUid = uid;
+    onAuthUserChanged(uid);
+  });
 }
 
 async function doSubmit(s: SessionState, gen: number) {
@@ -227,10 +345,12 @@ async function doSubmit(s: SessionState, gen: number) {
     if (gen !== generation) return;
     const code = e instanceof RpcError ? e.code : 'network';
     if (code === 'token_expired' || code === 'bad_token') {
-      // Discard the round, load a fresh one (docs/02 §8).
-      track('round_token_expired', { listing_id: round.id });
-      useSession.setState((st) => reduce({ ...st, phase: 'GUESSING' }, { type: 'SKIP' }));
-      useSession.setState((st) => ({ ...st, skipsUsed: Math.max(0, st.skipsUsed - 1), error: 'token_expired' }));
+      // Discard the round and re-issue the rest (docs/02 §8). Through dispatch
+      // so the STAGED → GUESSING side effects run (a raw setState left the
+      // next round staged with a dead keypad forever).
+      track('round_token_expired', { listing_id: round.id, code });
+      dispatch({ type: 'DISCARD_ROUND' });
+      void replacePool(code);
       return;
     }
     if (code === 'already_answered' || code === 'round_closed') {
@@ -313,7 +433,8 @@ async function onSummary(cfg: SessionConfig, s: SessionState) {
 function cancelTimers() {
   if (stagedTimer) clearTimeout(stagedTimer);
   if (deadlineTimer) clearTimeout(deadlineTimer);
-  stagedTimer = deadlineTimer = null;
+  if (loadingTimer) clearTimeout(loadingTimer);
+  stagedTimer = deadlineTimer = loadingTimer = null;
 }
 
 async function startSession(o: StartSessionOptions) {
@@ -321,7 +442,10 @@ async function startSession(o: StartSessionOptions) {
   const gen = generation;
   cancelTimers();
   loading = false;
+  replacing = false;
   opts = o;
+  // Pre-supplied server rounds (duel/room snapshots) were issued to the current user.
+  roundsUid = o.rounds && !o.localScoring ? currentUid() : null;
   const category = o.category ?? 'all';
   const region = o.region ?? null;
   const sessionId = o.sessionId ?? (o.mode === 'daily' ? 'daily' : [o.mode, category, region ?? ''].filter(Boolean).join(':'));
@@ -352,9 +476,11 @@ async function startSession(o: StartSessionOptions) {
 }
 
 async function loadDaily(gen: number, config: SessionConfig) {
+  const uid = currentUid();
   try {
     const set = await getDaily();
     if (gen !== generation) return;
+    roundsUid = uid;
     const meta: DailyMeta = { day: set.day, number: set.number, alreadyPlayed: set.already_played };
     useSession.setState({ daily: meta });
     if (set.already_played && set.result) {
@@ -406,8 +532,25 @@ export const sessionActions = {
     if (s.prevPhase === 'LOADING') { dispatch({ type: 'RETRY' }); if (s.config?.mode === 'daily') void loadDaily(generation, s.config); else void ensurePool(); return; }
     dispatch({ type: 'RETRY' });
   },
+  /**
+   * "Retry" from the round screen for *any* stuck state, not just ERROR:
+   * LOADING without a request in flight, STAGED that never got PHOTO_READY,
+   * a reveal without an outcome. Never leaves the screen blank.
+   */
+  recover() {
+    const s = useSession.getState();
+    switch (s.phase) {
+      case 'ERROR': sessionActions.retry(); return;
+      case 'LOADING': if (s.config?.mode === 'daily' && s.config) void loadDaily(generation, s.config); else void ensurePool(); return;
+      case 'STAGED': dispatch({ type: 'PHOTO_READY' }); return;
+      case 'REVEALING': case 'REVEALED': if (!s.lastOutcome) dispatch({ type: 'DISCARD_ROUND' }); return;
+      default: return;
+    }
+  },
   end() { dispatch({ type: 'END' }); },
-  reset() { generation += 1; cancelTimers(); opts = null; useSession.setState({ ...initialState, daily: null, dailySubmitted: null }); },
+  reset() { generation += 1; cancelTimers(); opts = null; loading = false; replacing = false; roundsUid = null; useSession.setState({ ...initialState, daily: null, dailySubmitted: null }); },
+  /** Test/diagnostic hook: which auth user the current pool's tokens belong to. */
+  poolOwner: () => roundsUid,
   useHint(hint: HintType) {
     dispatch({ type: 'USE_HINT', hint });
     track('round_hint_use', { type: hint });

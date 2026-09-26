@@ -1,6 +1,10 @@
 /**
  * Custom numeric keypad (docs/02 §1.2). Never the system keyboard. Renders a
  * value owned by the parent; all logic is in src/game/keypad.ts.
+ *
+ * 0 means "empty": the display shows `— €`, the Guess button is dimmed and
+ * inert (no haptic), quick steps start from 0 and clamp to [0, max].
+ * Long-pressing ⌫ clears the whole value.
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -28,6 +32,8 @@ interface Props {
   onStats?: (kind: 'digit' | 'step') => void;
 }
 
+const CLEAR_LONG_PRESS_MS = 400;
+
 export function Keypad({ value, onChange, onSubmit, category, listingCategory, attributes, disabled, submitting, onStats }: Props) {
   const { t } = useTranslation();
   const lang = currentLang();
@@ -38,32 +44,58 @@ export function Keypad({ value, onChange, onSubmit, category, listingCategory, a
   const stopRepeat = useCallback(() => { if (repeat.current) { clearInterval(repeat.current); repeat.current = null; } }, []);
   useEffect(() => stopRepeat, [stopRepeat]);
 
-  const act = useCallback((a: KeypadAction) => {
+  /** Apply an action; returns whether the value actually changed (clamped / rejected presses do not). */
+  const act = useCallback((a: KeypadAction): boolean => {
     const next = keypadReduce(valueRef.current, a, category);
-    if (next !== valueRef.current) { valueRef.current = next; onChange(next); }
+    const changed = next !== valueRef.current;
+    if (changed) { valueRef.current = next; onChange(next); }
     onStats?.(a.type === 'step' ? 'step' : 'digit');
+    return changed;
   }, [category, onChange, onStats]);
 
-  const press = (a: KeypadAction) => () => { void (a.type === 'step' ? haptic.step() : haptic.key()); act(a); };
+  // Haptic only when the press did something: a clamped step (−1k at 0) or a
+  // digit past the max stays silent so the feedback means "accepted".
+  const press = (a: KeypadAction) => () => {
+    if (act(a)) void (a.type === 'step' ? haptic.step() : haptic.key());
+  };
 
   const startRepeat = (a: KeypadAction) => () => {
     stopRepeat();
-    repeat.current = setInterval(() => act(a), STEP_REPEAT_MS);
+    repeat.current = setInterval(() => { if (!act(a)) stopRepeat(); }, STEP_REPEAT_MS);
   };
 
+  const empty = value <= 0;
+  const submittable = !disabled && !submitting && canSubmit(value);
   const steps = quickStepsFor(category);
   const derived = derivedValue(value, listingCategory, attributes);
+  const derivedText = derived
+    ? t(derived.kind === 'per_m2' ? 'keypad.per_m2' : 'keypad.per_ha', { value: formatEur(derived.value, lang) })
+    : null;
   const tripleOk = canTripleZero(value, category);
 
-  const keyStyle = (pressed: boolean, off = false) => [styles.key, pressed && styles.keyPressed, (disabled || off) && styles.keyOff];
+  const keyStyle = (pressed: boolean, off = false) => [styles.key, pressed && !(disabled || off) && styles.keyPressed, (disabled || off) && styles.keyOff];
+
+  const submit = () => {
+    if (!submittable) return;
+    void haptic.submit();
+    onSubmit();
+  };
+
+  /** `+ 10 000 €` / `− 1 000 €` so screen readers do not read "10k". */
+  const stepA11y = (d: number) => `${d < 0 ? '−' : '+'} ${formatEur(Math.abs(d), lang)}`;
 
   return (
     <View style={styles.root} accessible={false}>
-      <View style={styles.display} accessibilityRole="text" accessibilityLabel={value > 0 ? formatEur(value, lang) : t('keypad.empty')}>
-        <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>{formatEur(value > 0 ? value : null, lang)}</Text>
-        <Text style={styles.derived}>
-          {derived ? (derived.kind === 'per_m2' ? t('keypad.per_m2', { value: formatEur(derived.value, lang) }) : t('keypad.per_ha', { value: formatEur(derived.value, lang) })) : ' '}
+      <View
+        style={styles.display}
+        accessibilityRole="text"
+        accessibilityLiveRegion="polite"
+        accessibilityLabel={empty ? t('keypad.empty') : derivedText ? `${formatEur(value, lang)}, ${derivedText}` : formatEur(value, lang)}
+      >
+        <Text style={[styles.value, empty && styles.valueEmpty]} numberOfLines={1} adjustsFontSizeToFit>
+          {formatEur(empty ? null : value, lang)}
         </Text>
+        <Text style={styles.derived}>{derivedText ?? ' '}</Text>
       </View>
 
       <View style={styles.row}>
@@ -71,7 +103,8 @@ export function Keypad({ value, onChange, onSubmit, category, listingCategory, a
           <Pressable
             key={d}
             accessibilityRole="button"
-            accessibilityLabel={stepLabel(d)}
+            accessibilityLabel={stepA11y(d)}
+            accessibilityState={{ disabled: !!disabled }}
             disabled={disabled}
             onPress={press({ type: 'step', delta: d })}
             onLongPress={startRepeat({ type: 'step', delta: d })}
@@ -87,7 +120,7 @@ export function Keypad({ value, onChange, onSubmit, category, listingCategory, a
       {[[1, 2, 3], [4, 5, 6], [7, 8, 9]].map((row) => (
         <View style={styles.row} key={row[0]}>
           {row.map((n) => (
-            <Pressable key={n} accessibilityRole="button" accessibilityLabel={String(n)} disabled={disabled}
+            <Pressable key={n} accessibilityRole="button" accessibilityLabel={String(n)} accessibilityState={{ disabled: !!disabled }} disabled={disabled}
               onPress={press({ type: 'digit', digit: n })} style={({ pressed }) => keyStyle(pressed)}>
               <Text style={styles.digit}>{n}</Text>
             </Pressable>
@@ -95,24 +128,26 @@ export function Keypad({ value, onChange, onSubmit, category, listingCategory, a
         </View>
       ))}
       <View style={styles.row}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('keypad.triple_zero')} disabled={disabled || !tripleOk}
+        <Pressable accessibilityRole="button" accessibilityLabel={t('keypad.triple_zero')} accessibilityState={{ disabled: !!disabled || !tripleOk }} disabled={disabled || !tripleOk}
           onPress={press({ type: 'triple_zero' })} style={({ pressed }) => keyStyle(pressed, !tripleOk)}>
           <Text style={styles.digit}>000</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="0" disabled={disabled}
+        <Pressable accessibilityRole="button" accessibilityLabel="0" accessibilityState={{ disabled: !!disabled }} disabled={disabled}
           onPress={press({ type: 'digit', digit: 0 })} style={({ pressed }) => keyStyle(pressed)}>
           <Text style={styles.digit}>0</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('keypad.backspace')} accessibilityHint={t('keypad.backspace_hint')} disabled={disabled}
-          onPress={press({ type: 'backspace' })} onLongPress={press({ type: 'clear' })} style={({ pressed }) => keyStyle(pressed)}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('keypad.backspace')} accessibilityHint={t('keypad.backspace_hint')}
+          accessibilityState={{ disabled: !!disabled }} disabled={disabled}
+          onPress={press({ type: 'backspace' })} onLongPress={press({ type: 'clear' })} delayLongPress={CLEAR_LONG_PRESS_MS}
+          style={({ pressed }) => keyStyle(pressed)}>
           <Text style={styles.digit}>⌫</Text>
         </Pressable>
       </View>
 
       <Button
         title={t('round.guess_cta')}
-        onPress={() => { void haptic.submit(); onSubmit(); }}
-        disabled={disabled || !canSubmit(value)}
+        onPress={submit}
+        disabled={!submittable}
         loading={submitting}
         style={styles.submit}
       />
@@ -126,6 +161,7 @@ const styles = StyleSheet.create({
   root: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, gap: 6 },
   display: { alignItems: 'flex-end', paddingHorizontal: spacing.sm, paddingBottom: 2 },
   value: { fontSize: type.mono.fontSize, fontWeight: type.mono.fontWeight, color: colors.text, fontVariant: ['tabular-nums'] },
+  valueEmpty: { color: colors.textMuted },
   derived: { ...type.small, color: colors.textMuted, fontVariant: ['tabular-nums'], minHeight: 16 },
   row: { flexDirection: 'row', gap: 6 },
   key: {
