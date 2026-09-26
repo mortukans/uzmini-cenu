@@ -38,10 +38,16 @@ platform :ios do
       bundle = Spaceship::ConnectAPI::BundleId.create(name: "Uzmini Cenu", platform: "IOS", identifier: APP_ID)
     end
     existing_caps = bundle.get_capabilities.map(&:capability_type)
-    { "PUSH_NOTIFICATIONS" => nil, "ASSOCIATED_DOMAINS" => nil, "APPLE_ID_AUTH" => nil }.each_key do |cap|
+    cap_settings = {
+      "PUSH_NOTIFICATIONS" => [],
+      "ASSOCIATED_DOMAINS" => [],
+      # Sign in with Apple must say whether this app is the primary app or grouped under one
+      "APPLE_ID_AUTH" => [{ key: "APPLE_ID_AUTH_APP_CONSENT", options: [{ key: "PRIMARY_APP_CONSENT" }] }],
+    }
+    cap_settings.each do |cap, settings|
       next if existing_caps.include?(cap)
       UI.message("Enabling #{cap}")
-      bundle.create_capability(cap)
+      bundle.create_capability(cap, settings: settings)
     end
     app = Spaceship::ConnectAPI::App.find(APP_ID)
     # Apple's API does not allow creating apps; the record is created once by hand in App Store Connect.
