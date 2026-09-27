@@ -28,6 +28,7 @@ export default function DailyResult() {
   const { t } = useTranslation();
   const lang = currentLang();
   const hasUsername = useAuth((a) => a.hasUsername);
+  const uid = useAuth((a) => a.session?.user.id ?? null);
   const session = useSession();
   const [local, setLocal] = useState<{ number: number; total: number; grid: string; outcomes: StoredOutcome[]; synced: boolean } | null>(null);
   const [streakDays, setStreakDays] = useState(0);
@@ -35,9 +36,11 @@ export default function DailyResult() {
 
   useEffect(() => {
     screenView('daily_result');
+    // Local result / streak are per user (src/game/storage): re-read when the auth user changes.
+    setLocal(null); setStreakDays(0);
     void getDailyLocalResult().then(setLocal);
     void getDailyStreak().then((s) => setStreakDays(s?.days ?? 0));
-  }, [session.dailySubmitted]);
+  }, [session.dailySubmitted, uid]);
 
   const number = session.daily?.number ?? local?.number ?? 0;
   const total = session.dailySubmitted?.total ?? local?.total ?? 0;
@@ -75,7 +78,7 @@ export default function DailyResult() {
       <Text style={styles.title}>{t('daily.title', { no: number })}</Text>
       <Text style={styles.total}>{total.toLocaleString(lang === 'en' ? 'en-US' : 'lv-LV')} / 5 000</Text>
       <Text style={styles.grid}>{grid}</Text>
-      {streakDays >= 2 && <Text style={styles.flame}>🔥 {t('daily.streak_days', { n: streakDays })}</Text>}
+      {streakDays >= 2 && <Text style={styles.flame}>🔥 {t('daily.streak_days', { count: streakDays })}</Text>}
 
       <View style={styles.rows}>
         {outcomes.map((o) => (

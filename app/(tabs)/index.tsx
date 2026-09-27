@@ -21,12 +21,16 @@ const REGIONS: Region[] = ['riga', 'riga_region', 'latvia'];
 export default function HomeScreen() {
   const { t } = useTranslation();
   const profile = useAuth((a) => a.profile);
+  // Per-user local state (streak bests, local daily result) and the daily query
+  // are keyed by the auth user id: a link / restore / sign-out / delete must
+  // never show the previous account's values (build 25 regression).
+  const uid = useAuth((a) => a.session?.user.id ?? null);
   const [category, setCategory] = useState<CategoryFilter>('flats');
   const [region, setRegion] = useState<Region>('riga');
   const [bests, setBests] = useState<StreakBests>({});
   const [local, setLocal] = useState<{ day: string; total: number; grid: string } | null>(null);
 
-  const daily = useQuery({ queryKey: ['daily'], queryFn: getDaily, enabled: isConfigured, staleTime: 60_000 });
+  const daily = useQuery({ queryKey: ['daily', uid], queryFn: getDaily, enabled: isConfigured, staleTime: 60_000 });
 
   useEffect(() => {
     void (async () => {
@@ -37,11 +41,13 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => {
     screenView('home');
     void getPrefs().then((p) => { setCategory(p.category); setRegion(p.region); });
+    // Re-read for the current uid (the callback re-runs when it changes while focused).
+    setBests({}); setLocal(null);
     void getStreakBests().then(setBests);
     void getDailyLocalResult().then(setLocal);
     void daily.refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []));
+  }, [uid]));
 
   const pick = (c: CategoryFilter) => { void haptic.step(); setCategory(c); void setPrefs({ category: c }); };
   const pickRegion = (r: Region) => { void haptic.step(); setRegion(r); void setPrefs({ region: r }); };
@@ -51,7 +57,8 @@ export default function HomeScreen() {
     router.push(`/play/${encodeSessionId(mode, category, region)}`);
   };
 
-  // Server says played, or an anonymous/offline local result exists for today's set.
+  // Server truth first (`result` of get_daily for THIS user); the per-user local
+  // result only covers an anonymous/offline play of today's set.
   const localIsToday = Boolean(local && daily.data && local.day === daily.data.day);
   const dailyResult = daily.data?.result ?? (localIsToday ? local : null);
 

@@ -51,7 +51,8 @@ export default function PlayScreen() {
     screenView('play');
     if (!sessionId) return;
     if (isOnboarding) {
-      // Normally started by app/onboarding.tsx; a cold store (relaunch, hot reload) restarts the local practice set.
+      // Normally started by app/onboarding.tsx; a cold store (relaunch, hot reload) restarts the
+      // locally scored practice set (offline pack, or the bundled rounds when offline).
       if (!useSession.getState().config) void startPracticeSession();
       return;
     }
@@ -343,7 +344,7 @@ function Summary({ isOnboarding, sessionId }: { isOnboarding: boolean; sessionId
       <Screen edges={['top', 'left', 'right', 'bottom']}>
         <View style={[styles.body, styles.center]}>
           <Text style={styles.summaryEyebrow}>{t('onboarding.done_eyebrow')}</Text>
-          <Text style={styles.big}>{t('onboarding.started_with', { n: total })}</Text>
+          <Text style={styles.big}>{t('practice.started_with', { count: total })}</Text>
           <Text style={styles.grid}>{s.outcomes.map((o) => o.cell).join('')}</Text>
           <Text style={styles.summarySub}>{t('onboarding.done_body')}</Text>
         </View>
@@ -375,7 +376,7 @@ function Summary({ isOnboarding, sessionId }: { isOnboarding: boolean; sessionId
     <Screen scroll edges={['top', 'left', 'right', 'bottom']}>
       <Text style={styles.summaryEyebrow}>{t('summary.title')}</Text>
       <Text style={styles.big}>{max ? t('summary.total', { n: total.toLocaleString(lang === 'en' ? 'en-US' : 'lv-LV'), max: max.toLocaleString(lang === 'en' ? 'en-US' : 'lv-LV') }) : total}</Text>
-      <Text style={styles.summarySub}>{t('summary.avg', { n: avg })}</Text>
+      <Text style={styles.summarySub}>{t('summary.avg', { count: avg })}</Text>
       {s.outcomes.length > 0 && (
         <Text style={styles.summarySub}>{bias > 0 ? t('summary.bias_over', { pct: Math.abs(bias) }) : bias < 0 ? t('summary.bias_under', { pct: Math.abs(bias) }) : t('summary.bias_none')}</Text>
       )}

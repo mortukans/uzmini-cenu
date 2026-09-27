@@ -39,10 +39,23 @@ vi.mock('../api/rpc', () => ({
 vi.mock('../auth/store', () => ({ useAuth: auth }));
 vi.mock('../env', () => ({ isConfigured: true, env: {} }));
 vi.mock('../analytics', () => ({ track }));
+/** Per-user local state keyed by the auth uid (as src/game/storage does): hint tokens + streak bests. */
+const userState = vi.hoisted(() => ({
+  hints: {} as Record<string, number>,
+  bests: {} as Record<string, Record<string, number>>,
+  uid: () => auth.getState().session?.user.id ?? 'nouser',
+}));
 vi.mock('./storage', () => ({
-  bumpDailyStreak: vi.fn(async () => 1), getDailyProgress: vi.fn(async () => null), getHintTokens: vi.fn(async () => 0),
-  recordStreakBest: vi.fn(async () => 0), setDailyLocalResult: vi.fn(async () => {}), setDailyProgress: vi.fn(async () => {}),
-  setHintTokens: vi.fn(async () => {}), setStreakCurrent: vi.fn(async () => {}),
+  bumpDailyStreak: vi.fn(async () => 1), getDailyProgress: vi.fn(async () => null),
+  getHintTokens: vi.fn(async () => userState.hints[userState.uid()] ?? 0),
+  getStreakBests: vi.fn(async () => userState.bests[userState.uid()] ?? {}),
+  recordStreakBest: vi.fn(async (category: string, length: number) => {
+    const b = (userState.bests[userState.uid()] ??= {});
+    b[category] = Math.max(b[category] ?? 0, length);
+    return b[category];
+  }),
+  setDailyLocalResult: vi.fn(async () => {}), setDailyProgress: vi.fn(async () => {}),
+  setHintTokens: vi.fn(async (n: number) => { userState.hints[userState.uid()] = n; }), setStreakCurrent: vi.fn(async () => {}),
 }));
 
 import { RpcError } from '../api/rpc';
@@ -82,6 +95,7 @@ beforeEach(() => {
   rpc.getRounds.mockReset(); rpc.getDaily.mockReset(); rpc.submitGuess.mockReset();
   image.prefetch.mockReset().mockResolvedValue(true);
   track.mockReset();
+  userState.hints = {}; userState.bests = {};
   auth.setState({ session: null, hasUsername: false });
   sessionActions.reset();
 });
@@ -173,6 +187,50 @@ describe('auth user changes while a session is live', () => {
     expect(rpc.submitGuess).not.toHaveBeenCalled();
     expect(st().phase).toBe('REVEALING');
     expect(st().lastOutcome?.price).toBe(ONBOARDING_SET[0].price_eur);
+  });
+
+  it('re-reads the per-user local state (hint tokens, streak best) for the new user', async () => {
+    userState.hints['anon-1'] = 2;
+    userState.bests['anon-1'] = { all: 7 };
+    auth.signInAs('anon-1');
+    rpc.getRounds.mockResolvedValueOnce(pool(10));
+    await sessionActions.startSession({ mode: 'streak', category: 'all', sessionId: 'streak:all', streak: 0 });
+    useSession.setState({ streakBest: 7 }); // the round screen seeds it from getStreakBests()
+    await flush(); await flush();
+    expect(st().hintTokens).toBe(2);
+    expect(st().streakBest).toBe(7);
+
+    // restore a different account: its own (empty) local state, never anon-1's
+    rpc.getRounds.mockResolvedValueOnce(pool(10, 100));
+    auth.signInAs('apple-user');
+    await flush(); await flush();
+    expect(st().hintTokens).toBe(0);
+    expect(st().streakBest).toBe(0);
+    expect(sessionActions.poolOwner()).toBe('apple-user');
+
+    // and the values of a user with local state come back when switching to it
+    userState.hints['google-user'] = 1;
+    userState.bests['google-user'] = { all: 3 };
+    rpc.getRounds.mockResolvedValueOnce(pool(10, 200));
+    auth.signInAs('google-user');
+    await flush(); await flush();
+    expect(st().hintTokens).toBe(1);
+    expect(st().streakBest).toBe(3);
+  });
+
+  it('a spent hint token is written for the current user only', async () => {
+    userState.hints['anon-1'] = 2;
+    await startSolo('anon-1');
+    expect(await sessionActions.spendHintToken()).toBe(true);
+    expect(userState.hints['anon-1']).toBe(1);
+    expect(st().hintTokens).toBe(1);
+    rpc.getRounds.mockResolvedValueOnce(pool(10, 100));
+    auth.signInAs('apple-user');
+    await flush(); await flush();
+    expect(st().hintTokens).toBe(0);
+    expect(await sessionActions.spendHintToken()).toBe(false);
+    expect(userState.hints['anon-1']).toBe(1);
+    expect(userState.hints['apple-user']).toBeUndefined();
   });
 
   it('daily: remaining rounds are swapped for their re-tokenised twins', async () => {

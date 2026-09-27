@@ -71,6 +71,12 @@
     "s4_title": "Сохрани прогресс",
     "s4_body": "По желанию: привяжи Apple или Google, чтобы результаты и друзья сохранились. Можно и без аккаунта."
   },
+  "practice": {
+    "started_with_one": "Ты начал с {{count}} очка",
+    "started_with_few": "Ты начал с {{count}} очков",
+    "started_with_many": "Ты начал с {{count}} очков",
+    "started_with_other": "Ты начал с {{count}} очка"
+  },
   "round": {
     "guess_cta": "Угадать!",
     "asking": "Просят",
@@ -123,7 +129,6 @@
     "your_guess": "Твой ответ",
     "off_by": "Промах на {{pct}} %",
     "off_by_label": "Промах на",
-    "points": "{{n}} очков",
     "points_label": "очков",
     "perfect": "Точно!",
     "open_listing": "Открыть объявление",
@@ -131,7 +136,11 @@
     "result": "Результат",
     "source": "Источник: {{source}}",
     "hint_penalty": "без подсказки: {{n}}",
-    "soft_miss": "Мимо, но таков SS."
+    "soft_miss": "Мимо, но таков SS.",
+    "points_one": "{{count}} очко",
+    "points_few": "{{count}} очка",
+    "points_many": "{{count}} очков",
+    "points_other": "{{count}} очков"
   },
   "hint": {
     "sheet_title": "Подсказка",
@@ -145,7 +154,10 @@
   "summary": {
     "title": "Сессия завершена",
     "total": "Итого {{n}} / {{max}}",
-    "avg": "В среднем {{n}} очков за раунд",
+    "avg_one": "В среднем {{count}} очко за раунд",
+    "avg_few": "В среднем {{count}} очка за раунд",
+    "avg_many": "В среднем {{count}} очков за раунд",
+    "avg_other": "В среднем {{count}} очка за раунд",
     "bias_over": "Ты переоцениваешь на {{pct}} %",
     "bias_under": "Ты недооцениваешь на {{pct}} %",
     "bias_none": "В среднем ты попадаешь точно",
@@ -167,7 +179,10 @@
     "resume": "Продолжить: раунд {{n}}",
     "view_result": "Смотреть результат",
     "how_scored": "Как считаются очки?",
-    "streak_days": "{{n}} дней подряд",
+    "streak_days_one": "{{count}} день подряд",
+    "streak_days_few": "{{count}} дня подряд",
+    "streak_days_many": "{{count}} дней подряд",
+    "streak_days_other": "{{count}} дня подряд",
     "unsynced": "Результат ждёт синхронизации",
     "pending_sync": "Локальный результат {{total}} / 5 000 ждёт синхронизации",
     "rank_global": "Сегодня: {{rank}} место",
@@ -204,8 +219,13 @@
     "linked_body": "Аккаунт привязан. Теперь можно войти с любого устройства.",
     "restored_title": "Аккаунт восстановлен",
     "restored_body": "Твои прежние результаты и друзья снова с тобой.",
+    "merged_from_linked_body": "Твой прогресс теперь в этом аккаунте {{provider}}. Прежняя привязка {{oldProviders}} больше не работает — дальше входи через {{provider}}.",
+    "switched_title": "Аккаунт переключён",
+    "switched_body": "Теперь ты вошёл как {{username}}. Твой прежний аккаунт {{oldUsername}} по-прежнему доступен через {{oldProviders}}.",
+    "switched_body_lost": "Теперь ты вошёл как {{username}}. Твой прежний аккаунт {{oldUsername}} был только на этом устройстве и больше недоступен.",
     "account": "Аккаунт",
     "account_linked": "Привязан: {{providers}}",
+    "private_relay": "Apple (скрытый e-mail)",
     "account_not_linked": "Аккаунт живёт только на этом устройстве. Привяжи Apple или Google, чтобы ничего не потерять.",
     "sign_out": "Выйти",
     "sign_out_title": "Выйти из аккаунта?",

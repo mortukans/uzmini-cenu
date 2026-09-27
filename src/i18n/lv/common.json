@@ -71,6 +71,11 @@
     "s4_title": "Saglabā progresu",
     "s4_body": "Pēc izvēles: piesaisti Apple vai Google, lai rezultāti un draugi saglabātos. Var arī bez konta."
   },
+  "practice": {
+    "started_with_one": "Tu sāki ar {{count}} punktu",
+    "started_with_zero": "Tu sāki ar {{count}} punktiem",
+    "started_with_other": "Tu sāki ar {{count}} punktiem"
+  },
   "round": {
     "guess_cta": "Uzmini!",
     "asking": "Prasa",
@@ -123,7 +128,6 @@
     "your_guess": "Tavs minējums",
     "off_by": "Garām par {{pct}} %",
     "off_by_label": "Garām par",
-    "points": "{{n}} punkti",
     "points_label": "punkti",
     "perfect": "Precīzi!",
     "open_listing": "Atvērt sludinājumu",
@@ -131,7 +135,10 @@
     "result": "Rezultāts",
     "source": "Avots: {{source}}",
     "hint_penalty": "bez padoma: {{n}}",
-    "soft_miss": "Garām, bet tāds ir SS."
+    "soft_miss": "Garām, bet tāds ir SS.",
+    "points_one": "{{count}} punkts",
+    "points_zero": "{{count}} punktu",
+    "points_other": "{{count}} punkti"
   },
   "hint": {
     "sheet_title": "Padoms",
@@ -145,7 +152,9 @@
   "summary": {
     "title": "Sesija pabeigta",
     "total": "Kopā {{n}} / {{max}}",
-    "avg": "Vidēji {{n}} punkti kārtā",
+    "avg_one": "Vidēji {{count}} punkts kārtā",
+    "avg_zero": "Vidēji {{count}} punkti kārtā",
+    "avg_other": "Vidēji {{count}} punkti kārtā",
     "bias_over": "Tu pārvērtē par {{pct}} %",
     "bias_under": "Tu novērtē par zemu par {{pct}} %",
     "bias_none": "Tu trāpi vidēji precīzi",
@@ -167,7 +176,9 @@
     "resume": "Turpināt: {{n}}. kārta",
     "view_result": "Skatīt rezultātu",
     "how_scored": "Kā skaita punktus?",
-    "streak_days": "{{n}} dienas pēc kārtas",
+    "streak_days_one": "{{count}} diena pēc kārtas",
+    "streak_days_zero": "{{count}} dienas pēc kārtas",
+    "streak_days_other": "{{count}} dienas pēc kārtas",
     "unsynced": "Rezultāts gaida sinhronizāciju",
     "pending_sync": "Vietējais rezultāts {{total}} / 5 000 gaida sinhronizāciju",
     "rank_global": "Šodien: {{rank}}. vieta",
@@ -204,8 +215,13 @@
     "linked_body": "Tavs konts tagad ir piesaistīts. Vari ienākt no jebkuras ierīces.",
     "restored_title": "Konts atjaunots",
     "restored_body": "Tavi iepriekšējie rezultāti un draugi ir atpakaļ.",
+    "merged_from_linked_body": "Tavs progress tagad ir šajā {{provider}} kontā. Iepriekšējā {{oldProviders}} piesaiste vairs nedarbojas — turpmāk ienāc ar {{provider}}.",
+    "switched_title": "Konts nomainīts",
+    "switched_body": "Tagad esi ienācis kā {{username}}. Tavs iepriekšējais konts {{oldUsername}} joprojām ir pieejams caur {{oldProviders}}.",
+    "switched_body_lost": "Tagad esi ienācis kā {{username}}. Tavs iepriekšējais konts {{oldUsername}} bija tikai šajā ierīcē un vairs nav pieejams.",
     "account": "Konts",
     "account_linked": "Piesaistīts: {{providers}}",
+    "private_relay": "Apple (slēpts e-pasts)",
     "account_not_linked": "Konts ir tikai šajā ierīcē. Piesaisti Apple vai Google, lai neko nepazaudētu.",
     "sign_out": "Iziet",
     "sign_out_title": "Iziet no konta?",

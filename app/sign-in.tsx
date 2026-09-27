@@ -3,9 +3,12 @@
  * Live validation → setUsername RPC → resolveSignIn(true) and close.
  * Below the field, only while the account is NOT linked yet: "or restore an
  * existing account" + Apple/Google (ProviderButtons). A linked account shows a
- * one-line "Linked: Apple" note instead. After a link / restore: the modal closes
- * as soon as the profile has a username, otherwise the username field is focused.
- * Depends on: src/auth/apple (resolveSignIn), src/auth/store, src/auth/providers (describeIdentities),
+ * "Linked: Apple" note (+ e-mail / "Apple (private relay)") instead — never
+ * other provider buttons, which would switch to a different account. After a
+ * link / restore: the modal closes as soon as the profile has a username,
+ * otherwise the username field is focused. (ProviderButtons itself announces a
+ * "switched account" when a user who already had a username lands elsewhere.)
+ * Depends on: src/auth/apple (resolveSignIn), src/auth/store, src/auth/providers (describeIdentities, formatAccount),
  * src/api/rpc.setUsername, i18n social + common.auth.
  */
 import { useEffect, useRef, useState } from 'react';
@@ -13,7 +16,7 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-nativ
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { resolveSignIn } from '../src/auth/apple';
-import { describeIdentities } from '../src/auth/providers';
+import { describeIdentities, formatAccount } from '../src/auth/providers';
 import { isAutoUsername, useAuth } from '../src/auth/store';
 import { RpcError, setUsername } from '../src/api/rpc';
 import { ProviderButtons, useProvidersAvailable } from '../src/ui/components';
@@ -122,9 +125,14 @@ export default function ChooseUsernameScreen() {
       <Text style={[type.small, { color: colors.textMuted }]}>{t('signIn.privacy')}</Text>
 
       {linked ? (
-        <Text style={[type.small, { color: colors.textMuted, marginTop: spacing.sm }]}>
-          {tc('auth.account_linked', { providers: linked.providers.join(', ') })}
-        </Text>
+        <View style={{ marginTop: spacing.sm, gap: 2 }}>
+          <Text style={[type.small, { color: colors.textMuted }]}>
+            {tc('auth.account_linked', { providers: linked.providers.join(', ') })}
+          </Text>
+          {linked.accounts.map((a) => (
+            <Text key={a.provider} style={[type.small, { color: colors.textMuted }]} numberOfLines={1}>{formatAccount(a, tc('auth.private_relay'))}</Text>
+          ))}
+        </View>
       ) : providers.any && (
         <View style={{ gap: spacing.md, marginTop: spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>

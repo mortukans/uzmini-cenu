@@ -22,7 +22,7 @@ import {
 } from './machine';
 import { HINT_TOKEN_EVERY_HITS, MAX_HINT_TOKENS, hintsAllowed, type HintType } from './hints';
 import {
-  bumpDailyStreak, getDailyProgress, getHintTokens, recordStreakBest, setDailyLocalResult, setDailyProgress,
+  bumpDailyStreak, getDailyProgress, getHintTokens, getStreakBests, recordStreakBest, setDailyLocalResult, setDailyProgress,
   setHintTokens, setStreakCurrent, type StoredOutcome,
 } from './storage';
 import { rigaDay } from './time';
@@ -296,12 +296,28 @@ async function replacePool(reason: 'auth_change' | 'bad_token' | 'token_expired'
 /**
  * Called (via the useAuth subscription below) whenever auth.uid() changes:
  * Apple/Google link or restore, sign-out → fresh anonymous account. Never
- * resets the session or navigates; it only re-issues stale tokens.
+ * resets the session or navigates; it re-issues stale tokens and re-reads
+ * the per-user local state (hint tokens, streak best — src/game/storage keys
+ * are scoped by uid) so the new account never sees the previous one's values.
  */
 function onAuthUserChanged(uid: string | null) {
-  if (!uid || !roundsUid || roundsUid === uid) return;
+  if (!uid) return;
+  void reloadUserState();
+  if (!roundsUid || roundsUid === uid) return;
   if (!ownsTokens() || useSession.getState().phase === 'SUMMARY') return;
   void replacePool('auth_change');
+}
+
+/** Re-read the per-user values the store mirrors (after an auth user change). */
+async function reloadUserState(): Promise<void> {
+  const gen = generation;
+  const cfg = useSession.getState().config;
+  const [hintTokens, bests] = await Promise.all([
+    getHintTokens().catch(() => 0),
+    cfg?.mode === 'streak' ? getStreakBests().catch(() => ({} as Awaited<ReturnType<typeof getStreakBests>>)) : Promise.resolve(null),
+  ]);
+  if (gen !== generation) return;
+  useSession.setState({ hintTokens, ...(bests && cfg ? { streakBest: bests[cfg.category] ?? 0 } : {}) });
 }
 
 let knownUid: string | null = null;

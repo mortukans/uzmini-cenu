@@ -5,38 +5,47 @@
  * is available. Cancelled sheets are silent; other errors → Alert (i18n auth.err.*).
  *
  * Flow per press: both buttons disabled while one sign-in is in flight →
- * store.signInWithX() (merge + profile refresh) → loading reset → success alert
- * (awaited until the user taps OK) → `onDone(ProviderDone)`. So a parent may
- * navigate / close a modal inside onDone without racing the alert.
- * Depends on: src/auth/store (signInWithApple/Google, hasUsername), src/auth/providers.
+ * store.signInWithX() (merge + profile refresh) → loading reset → one alert
+ * describing what happened (awaited until the user taps OK) → `onDone(ProviderDone)`.
+ * So a parent may navigate / close a modal inside onDone without racing the alert.
+ *
+ * The alert is picked from the account BEFORE vs AFTER the sign-in
+ * (store.linkOutcome): progress saved / account restored, and the two cases a
+ * user with a chosen username must be told about — "switched account" (landed
+ * on a different existing account) and "merged from a linked account" (the old
+ * Apple/Google link is gone).
+ * Depends on: src/auth/store (signInWithApple/Google, accountSnapshot, linkOutcome), src/auth/providers.
  */
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { RpcError } from '../../api/rpc';
-import { ProviderCancelled, googleConfigured, isAppleAvailable, type LinkResult, type Provider } from '../../auth/providers';
-import { useAuth } from '../../auth/store';
+import { ProviderCancelled, googleConfigured, isAppleAvailable, providerLabel, type LinkResult, type Provider } from '../../auth/providers';
+import { accountSnapshot, linkOutcome, useAuth, type LinkOutcome } from '../../auth/store';
 import { track } from '../../analytics';
 import { colors, radius, spacing } from '../theme';
 
-/** Passed to `onDone` once the sign-in finished AND the success alert (if any) was dismissed. */
+/** Passed to `onDone` once the sign-in finished AND the alert (if any) was dismissed. */
 export interface ProviderDone {
   provider: Provider;
-  /** What happened to the anonymous account (see src/auth/providers LinkResult). */
+  /** What happened to the previous account (see src/auth/providers LinkResult). */
   result: LinkResult;
+  /** Finer-grained than `result`: what the user was told (see src/auth/store LinkOutcome). */
+  outcome: LinkOutcome;
   /** The (merged / restored) profile already carries a chosen username; read from the auth store after its refresh. */
   hasUsername: boolean;
 }
 
 interface Props {
   /**
-   * Called after a successful link / restore, only once the "progress saved /
-   * account restored" alert has been dismissed (or immediately when there is
-   * no alert: `announce={false}` or result 'unchanged'). Never called on cancel or error.
+   * Called after a successful link / restore, only once the outcome alert has
+   * been dismissed (or immediately when there is none: `announce={false}` or
+   * result 'unchanged'). Never called on cancel or error.
    */
   onDone?: (done: ProviderDone) => void;
-  /** Show the "progress saved / account restored" alert (default true). */
+  /** Show the outcome alert (default true). */
   announce?: boolean;
   style?: StyleProp<ViewStyle>;
 }
@@ -46,6 +55,25 @@ export function useProvidersAvailable(): { apple: boolean; google: boolean; any:
   const [apple, setApple] = useState(false);
   useEffect(() => { let on = true; void isAppleAvailable().then((v) => { if (on) setApple(v); }); return () => { on = false; }; }, []);
   return { apple, google: googleConfigured, any: apple || googleConfigured };
+}
+
+/** Title + body of the alert for an outcome (null for 'unchanged'). i18n common.auth.*. */
+export function outcomeMessage(t: TFunction, o: LinkOutcome): { title: string; body: string } | null {
+  const labels = (ps: Provider[]) => ps.map(providerLabel).join(', ');
+  switch (o.kind) {
+    case 'unchanged': return null;
+    case 'linked': return { title: t('auth.linked_title'), body: t('auth.linked_body') };
+    case 'merged_from_linked':
+      return { title: t('auth.linked_title'), body: t('auth.merged_from_linked_body', { provider: providerLabel(o.provider), oldProviders: labels(o.oldProviders) }) };
+    case 'restored': return { title: t('auth.restored_title'), body: t('auth.restored_body') };
+    case 'switched':
+      return {
+        title: t('auth.switched_title'),
+        body: o.oldProviders.length
+          ? t('auth.switched_body', { username: o.username, oldUsername: o.oldUsername, oldProviders: labels(o.oldProviders) })
+          : t('auth.switched_body_lost', { username: o.username, oldUsername: o.oldUsername }),
+      };
+  }
 }
 
 /** Alert.alert as a Promise: resolves when the user taps OK (or the alert is dismissed on Android). */
@@ -75,15 +103,19 @@ export function ProviderButtons({ onDone, announce = true, style }: Props) {
     setBusy(provider);
     track('identity_link_start', { provider });
     try {
+      const before = accountSnapshot(useAuth.getState());
       const result = await (provider === 'apple' ? signInWithApple() : signInWithGoogle());
-      track('identity_link_done', { provider, result });
+      const after = useAuth.getState();
+      const outcome = linkOutcome(provider, result, before, accountSnapshot(after));
+      track('identity_link_done', { provider, result, outcome: outcome.kind });
       // The sign-in is over: release the buttons before the alert, not after it.
       stopLoading();
-      if (announce && result !== 'unchanged') {
+      const msg = announce ? outcomeMessage(t, outcome) : null;
+      if (msg) {
         await settle();
-        await alertAsync(t(`auth.${result}_title`), t(`auth.${result}_body`), t('common.ok'));
+        await alertAsync(msg.title, msg.body, t('common.ok'));
       }
-      onDone?.({ provider, result, hasUsername: useAuth.getState().hasUsername });
+      onDone?.({ provider, result, outcome, hasUsername: after.hasUsername });
     } catch (e) {
       stopLoading();
       if (e instanceof ProviderCancelled) { track('identity_link_cancel', { provider }); return; }

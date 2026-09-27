@@ -67,7 +67,7 @@ export function RevealCard({ outcome, animate, onAnimationDone, derived, otherNa
     scoreScale.value = withSpring(1, { damping: 12, stiffness: 220 });
     void haptic.reveal(score);
     AccessibilityInfo.announceForAccessibility(
-      `${t('round.asking')} ${formatEur(price, lang)}. ${t('reveal.points', { n: score })}`,
+      `${t('round.asking')} ${formatEur(price, lang)}. ${t('reveal.points', { count: score })}`,
     );
     onAnimationDone();
     // onAnimationDone/t are stable enough per round; the effect below re-keys on the round anyway.
@@ -144,7 +144,7 @@ export function RevealCard({ outcome, animate, onAnimationDone, derived, otherNa
           accessible={settled}
           accessibilityElementsHidden={!settled}
           importantForAccessibility={settled ? 'auto' : 'no-hide-descendants'}
-          accessibilityLabel={t('reveal.points', { n: score })}
+          accessibilityLabel={t('reveal.points', { count: score })}
         >
           <Text style={[styles.score, { color: tileColor }]}>{score}</Text>
           <Text style={styles.scoreLabel}>{t('reveal.points_label')}</Text>

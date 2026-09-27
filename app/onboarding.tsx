@@ -5,8 +5,9 @@
  *   3 daily challenge + duels                  4 save your progress (ProviderButtons,
  *     "Continue without account" → practice rounds). Nothing requires an account.
  * Flow rules live in src/game/onboarding.ts: `onboarded` is persisted when the
- * user leaves slide 4 (before practice); practice uses the bundled local set;
- * a restored account with a username goes straight home. ProviderButtons calls
+ * user leaves slide 4 (before practice); practice plays real listings from the
+ * offline pack (bundled set when offline), scored on device; a restored account
+ * with a username goes straight home. ProviderButtons calls
  * `onDone` only after its "progress saved / account restored" alert has been
  * dismissed, so navigation never happens underneath that alert.
  * Depends on: src/game/onboarding, src/game/storage (setPrefs), src/ui/components.
@@ -57,7 +58,7 @@ export default function Onboarding() {
     if (i !== page) { setPage(i); track('onboarding_slide', { index: i }); }
   };
 
-  /** Practice rounds: bundled local set, scored on device (persists `onboarded` first). */
+  /** Practice rounds: offline pack (or the bundled set), scored on device (persists `onboarded` first). */
   const startPractice = async () => {
     if (busy) return;
     setBusy(true);

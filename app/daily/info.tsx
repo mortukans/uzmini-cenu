@@ -17,7 +17,7 @@ export default function DailyInfo() {
         {TABLE.map(([err, pts]) => (
           <View key={err} style={styles.row}>
             <Text style={styles.cell}>{t('daily.info_err', { pct: err })}</Text>
-            <Text style={[styles.cell, styles.pts]}>{t('reveal.points', { n: pts })}</Text>
+            <Text style={[styles.cell, styles.pts]}>{t('reveal.points', { count: pts })}</Text>
           </View>
         ))}
       </View>

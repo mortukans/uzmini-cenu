@@ -71,6 +71,10 @@
     "s4_title": "Save your progress",
     "s4_body": "Optional: link Apple or Google so results and friends are kept. Works without an account too."
   },
+  "practice": {
+    "started_with_one": "You started with {{count}} point",
+    "started_with_other": "You started with {{count}} points"
+  },
   "round": {
     "guess_cta": "Guess!",
     "asking": "Asking",
@@ -123,7 +127,6 @@
     "your_guess": "Your guess",
     "off_by": "Off by {{pct}}%",
     "off_by_label": "Off by",
-    "points": "{{n}} points",
     "points_label": "points",
     "perfect": "Spot on!",
     "open_listing": "Open listing",
@@ -131,7 +134,9 @@
     "result": "Result",
     "source": "Source: {{source}}",
     "hint_penalty": "without hints: {{n}}",
-    "soft_miss": "Way off, but that's SS for you."
+    "soft_miss": "Way off, but that's SS for you.",
+    "points_one": "{{count}} point",
+    "points_other": "{{count}} points"
   },
   "hint": {
     "sheet_title": "Hint",
@@ -145,7 +150,8 @@
   "summary": {
     "title": "Session complete",
     "total": "Total {{n}} / {{max}}",
-    "avg": "Average {{n}} points per round",
+    "avg_one": "Average {{count}} point per round",
+    "avg_other": "Average {{count}} points per round",
     "bias_over": "You overprice by {{pct}}%",
     "bias_under": "You underprice by {{pct}}%",
     "bias_none": "On average you are spot on",
@@ -167,7 +173,8 @@
     "resume": "Continue: round {{n}}",
     "view_result": "View result",
     "how_scored": "How is it scored?",
-    "streak_days": "{{n}} days in a row",
+    "streak_days_one": "{{count}} day in a row",
+    "streak_days_other": "{{count}} days in a row",
     "unsynced": "Result is waiting to sync",
     "pending_sync": "Local result {{total}} / 5,000 is waiting to sync",
     "rank_global": "Today: rank {{rank}}",
@@ -204,8 +211,13 @@
     "linked_body": "Your account is linked. You can sign in from any device.",
     "restored_title": "Account restored",
     "restored_body": "Your previous results and friends are back.",
+    "merged_from_linked_body": "Your progress is now on this {{provider}} account. The previous {{oldProviders}} link is gone — sign in with {{provider}} from now on.",
+    "switched_title": "Switched account",
+    "switched_body": "You are now signed in as {{username}}. Your previous account {{oldUsername}} is still available via {{oldProviders}}.",
+    "switched_body_lost": "You are now signed in as {{username}}. Your previous account {{oldUsername}} was only on this device and is no longer available.",
     "account": "Account",
     "account_linked": "Linked: {{providers}}",
+    "private_relay": "Apple (private relay)",
     "account_not_linked": "This account lives only on this device. Link Apple or Google so nothing gets lost.",
     "sign_out": "Sign out",
     "sign_out_title": "Sign out?",

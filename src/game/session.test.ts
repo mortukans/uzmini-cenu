@@ -28,8 +28,8 @@ vi.mock('../env', () => ({ isConfigured: true, env: {} }));
 vi.mock('../analytics', () => ({ track: vi.fn() }));
 vi.mock('./storage', () => ({
   bumpDailyStreak: vi.fn(async () => 1), getDailyProgress: vi.fn(async () => null), getHintTokens: vi.fn(async () => 0),
-  recordStreakBest: vi.fn(async () => 0), setDailyLocalResult: vi.fn(async () => {}), setDailyProgress: vi.fn(async () => {}),
-  setHintTokens: vi.fn(async () => {}), setStreakCurrent: vi.fn(async () => {}),
+  getStreakBests: vi.fn(async () => ({})), recordStreakBest: vi.fn(async () => 0), setDailyLocalResult: vi.fn(async () => {}),
+  setDailyProgress: vi.fn(async () => {}), setHintTokens: vi.fn(async () => {}), setStreakCurrent: vi.fn(async () => {}),
 }));
 
 import { RpcError } from '../api/rpc';

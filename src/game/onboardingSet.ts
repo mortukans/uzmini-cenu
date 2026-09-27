@@ -1,6 +1,7 @@
 /**
  * Bundled offline practice set for onboarding (docs/11 §2.1): one flat, one
- * car, one random item, scored locally. Used when get_rounds is slow/offline.
+ * car, one random item, scored locally. Only the FALLBACK when get_offline_pack
+ * fails, is slow or returns too few rounds (see src/game/onboarding.ts).
  * Prices are typical 2026 asking prices, not live listings; photos are empty
  * so the carousel shows the category glyph.
  */

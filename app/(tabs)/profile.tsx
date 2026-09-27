@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Constants from 'expo-constants';
 import { deleteMe, setUsername as saveUsernameRpc, updateProfile, RpcError } from '../../src/api/rpc';
 import type { Lang } from '../../src/api/types';
-import { describeIdentities } from '../../src/auth/providers';
+import { describeIdentities, formatAccount } from '../../src/auth/providers';
 import { isAutoUsername, useAuth } from '../../src/auth/store';
 import { env, isConfigured } from '../../src/env';
 import { clearAll, getDailyStreak, getHintTokens, getPrefs, getStreakBests, setOnboarded, setPrefs, type StreakBests } from '../../src/game/storage';
@@ -160,18 +160,23 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {/* Account: linked providers, or the link buttons (nothing is required) */}
+      {/* Account: linked providers (+ Sign out), or the link buttons (nothing is required).
+          A linked account never gets other provider buttons here: "Continue with X"
+          on a linked account would sign the user into a different account (see
+          store.linkOutcome 'switched'). */}
       {(isLinked || providers.any) && (
         <>
           <Text style={styles.section}>{t('auth.account')}</Text>
           <View style={styles.card}>
             {linked ? (
               <>
-                {/* "Linked: Apple, Google" + the e-mail Supabase knows for it (if any) */}
+                {/* "Linked: Apple, Google" + one line per identity: "Google · name@gmail.com" / "Apple (private relay)" */}
                 <View style={styles.row} accessibilityRole="text">
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={styles.rowLabel}>{t('auth.account_linked', { providers: linked.providers.join(', ') })}</Text>
-                    {linked.email ? <Text style={styles.muted} numberOfLines={1}>{linked.email}</Text> : null}
+                    {linked.accounts.map((a) => (
+                      <Text key={a.provider} style={styles.muted} numberOfLines={1}>{formatAccount(a, t('auth.private_relay'))}</Text>
+                    ))}
                   </View>
                 </View>
                 <Row label={t('auth.sign_out')} onPress={confirmSignOut} />

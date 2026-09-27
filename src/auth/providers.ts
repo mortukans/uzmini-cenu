@@ -4,10 +4,17 @@
  *
  * Supabase cannot link a native id token into an anonymous user
  * (linkIdentity is OAuth-redirect only), so signInWithIdToken always signs in
- * AS the provider user. The merge happens server-side (migration 22):
- *   prepare_merge()  (as the anonymous user)  → one-time token
+ * AS the provider user. The merge happens server-side (migrations 22 + 23):
+ *   prepare_merge()  (as the current user)    → one-time token
  *   signInWithIdToken(...)                    → session is now the provider user
- *   claim_merge(token) (as the provider user) → moves data / drops the anon user
+ *   claim_merge(token) (as the provider user) → moves data / drops the old user
+ *
+ * The current user may itself be a linked account (Profile → Account after a
+ * "Replay intro", or a second provider): migration 23 lets any session prepare
+ * a merge. claim_merge then either moves everything onto a NEW provider account
+ * (the old auth user, and with it its old Apple/Google link, is deleted) or
+ * restores an EXISTING one (an old *linked* account stays intact and can be
+ * signed back into; an old anonymous account is dropped as before).
  *
  * After a merge / restore the *current UI language* is written to the profile
  * (the user may have just picked it on the onboarding welcome slide); the
@@ -30,25 +37,58 @@ export type Provider = 'apple' | 'google';
 
 const PROVIDER_LABEL: Record<Provider, string> = { apple: 'Apple', google: 'Google' };
 export const isProvider = (p: string): p is Provider => p === 'apple' || p === 'google';
+export const providerLabel = (p: Provider): string => PROVIDER_LABEL[p];
+
+/** Apple "Hide My Email" addresses: never worth showing raw (i18n auth.private_relay instead). */
+export const isPrivateRelay = (email: string | null | undefined): boolean =>
+  typeof email === 'string' && /@privaterelay\.appleid\.com$/i.test(email);
+
+/** One linked Apple / Google identity as the UI shows it. */
+export interface LinkedAccount {
+  provider: Provider;
+  /** "Apple" / "Google" */
+  label: string;
+  /** E-mail Supabase stored in identity_data (null when the provider did not share one). */
+  email: string | null;
+  /** `email` is an Apple private-relay address. */
+  privateRelay: boolean;
+}
+
+export const identityEmail = (i: UserIdentity): string | null => {
+  const e = (i.identity_data as { email?: unknown } | undefined)?.email;
+  return typeof e === 'string' && e.length > 0 ? e : null;
+};
+
+/** Apple / Google providers of `identities`, in identity order. */
+export const linkedProviders = (identities: UserIdentity[]): Provider[] =>
+  identities.map((i) => i.provider).filter(isProvider);
 
 /**
  * Human-readable summary of the linked identities (Profile → Account, sign-in
- * modal): provider labels in identity order + the first e-mail Supabase stored
- * in identity_data (Apple may hand out a private-relay address; may be null).
+ * modal): provider labels in identity order, one `accounts` entry per Apple /
+ * Google identity, and the first e-mail (may be null; may be a relay address).
  */
-export function describeIdentities(identities: UserIdentity[]): { providers: string[]; email: string | null } {
-  const linked = identities.filter((i) => isProvider(i.provider));
-  const providers = linked.map((i) => PROVIDER_LABEL[i.provider as Provider]);
-  const email = linked
-    .map((i) => (i.identity_data as { email?: unknown } | undefined)?.email)
-    .find((e): e is string => typeof e === 'string' && e.length > 0) ?? null;
-  return { providers, email };
+export function describeIdentities(identities: UserIdentity[]): { providers: string[]; accounts: LinkedAccount[]; email: string | null } {
+  const accounts: LinkedAccount[] = identities
+    .filter((i) => isProvider(i.provider))
+    .map((i) => {
+      const email = identityEmail(i);
+      return { provider: i.provider as Provider, label: PROVIDER_LABEL[i.provider as Provider], email, privateRelay: isPrivateRelay(email) };
+    });
+  return { providers: accounts.map((a) => a.label), accounts, email: accounts.find((a) => a.email)?.email ?? null };
 }
 
-/** Outcome of linkOrSignIn(): what happened to the previous anonymous account. */
+/**
+ * One line per linked account: "Apple (private relay)" (relayLabel) for a relay
+ * address, "Google · name@gmail.com" with a real one, just "Apple" without any.
+ */
+export const formatAccount = (a: LinkedAccount, relayLabel: string): string =>
+  a.privateRelay ? relayLabel : a.email ? `${a.label} · ${a.email}` : a.label;
+
+/** Outcome of linkOrSignIn(): what happened to the previous account. */
 export type LinkResult =
-  | 'linked'    // anonymous progress moved onto the provider account
-  | 'restored'  // provider account already existed; its data wins, anon account dropped
+  | 'linked'    // previous account's progress moved onto the (new) provider account
+  | 'restored'  // provider account already existed; its data wins (an anonymous previous account is dropped)
   | 'unchanged'; // already signed in as this provider user (nothing to merge)
 
 /** Thrown when the user dismissed the native sheet. Callers stay silent. */
@@ -104,18 +144,21 @@ async function googleIdToken(): Promise<string> {
 // ─── link / restore ──────────────────────────────────────────────────────────
 
 /**
- * Sign in with `provider`; if the device was anonymous, merge it into the provider
- * account. Throws ProviderCancelled (silent) or RpcError / Error (show to the user).
+ * Sign in with `provider`; if the device had a session (anonymous or already
+ * linked), merge it into the provider account when that one is new, or restore
+ * the provider account when it already exists.
+ * Throws ProviderCancelled (silent) or RpcError / Error (show to the user).
  */
 export async function linkOrSignIn(provider: Provider): Promise<LinkResult> {
   if (!isConfigured) throw new RpcError('provider_unavailable');
   const { data: { session: before } } = await supabase.auth.getSession();
-  const wasAnonymous = Boolean(before && (before.user as { is_anonymous?: boolean }).is_anonymous);
 
-  // 1. token while we are still the anonymous user (best effort: a failure here
-  //    only means the progress cannot be carried over, sign-in still works)
+  // 1. merge token while we are still the current user (anonymous OR linked, see
+  //    migration 23). Best effort: a failure here (offline, old backend that still
+  //    rejects non-anonymous callers) only means the progress cannot be carried
+  //    over, sign-in still works.
   let mergeToken: string | null = null;
-  if (wasAnonymous) {
+  if (before) {
     try { mergeToken = await prepareMerge(); } catch { mergeToken = null; }
   }
 
@@ -127,7 +170,7 @@ export async function linkOrSignIn(provider: Provider): Promise<LinkResult> {
   if (!newId) throw new RpcError('provider_error');
   if (!before || newId === before.user.id) return 'unchanged';
 
-  // 3. carry the anonymous data over (or drop it when the account already exists)
+  // 3. carry the previous account's data over (or keep the existing account's data)
   let result: LinkResult = 'restored';
   if (mergeToken) {
     const r = await claimMerge(mergeToken);

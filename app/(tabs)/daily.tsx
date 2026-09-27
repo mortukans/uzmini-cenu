@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getDaily } from '../../src/api/rpc';
+import { useAuth } from '../../src/auth/store';
 import { isConfigured } from '../../src/env';
 import { getDailyLocalResult, getDailyProgress, getDailyStreak } from '../../src/game/storage';
 import { formatDay } from '../../src/game/time';
@@ -16,7 +17,11 @@ import { colors, radius, spacing, type } from '../../src/ui/theme';
 export default function DailyTab() {
   const { t } = useTranslation();
   const lang = currentLang();
-  const daily = useQuery({ queryKey: ['daily'], queryFn: getDaily, enabled: isConfigured, staleTime: 60_000, retry: 2 });
+  // get_daily is server truth per user (`already_played` / `result`): the query
+  // is keyed by the auth user id so a link / restore / sign-out never shows the
+  // previous account's result, and it is re-fetched on every focus.
+  const uid = useAuth((a) => a.session?.user.id ?? null);
+  const daily = useQuery({ queryKey: ['daily', uid], queryFn: getDaily, enabled: isConfigured, staleTime: 60_000, retry: 2 });
   const [local, setLocal] = useState<{ day: string; total: number; grid: string } | null>(null);
   const [resume, setResume] = useState<number | null>(null);
   const [streakDays, setStreakDays] = useState(0);
@@ -24,13 +29,16 @@ export default function DailyTab() {
   useFocusEffect(useCallback(() => {
     screenView('daily_tab');
     void daily.refetch();
+    // Per-user local state: drop the previous values, then read them for the current uid.
+    setLocal(null); setResume(null); setStreakDays(0);
     void getDailyLocalResult().then(setLocal);
     void getDailyProgress().then((p) => setResume(p && p.day === daily.data?.day ? p.outcomes.length + 1 : null));
     void getDailyStreak().then((s) => setStreakDays(s?.days ?? 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [daily.data?.day]));
+  }, [uid, daily.data?.day]));
 
   const set = daily.data;
+  // Server truth first; the local (per-user) result only stands in for an anonymous/offline play of today's set.
   const played = set?.already_played || (set && local?.day === set.day);
   const result = set?.result ?? (played && local ? local : null);
   const preparing = daily.isError && String((daily.error as Error)?.message ?? '').includes('daily_not_ready');
@@ -69,7 +77,7 @@ export default function DailyTab() {
               {set.rounds.map((r, i) => <Text key={`${r.id}-${i}`} style={styles.icon}>{GLYPH[r.category] ?? '📦'}</Text>)}
             </View>
             <Text style={styles.body}>{t('daily.rules')}</Text>
-            {streakDays >= 2 && <Text style={styles.flame}>🔥 {t('daily.streak_days', { n: streakDays })}</Text>}
+            {streakDays >= 2 && <Text style={styles.flame}>🔥 {t('daily.streak_days', { count: streakDays })}</Text>}
             {result ? (
               <>
                 <Text style={styles.score}>{result.total} / 5 000</Text>
