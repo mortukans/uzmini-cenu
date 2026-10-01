@@ -111,12 +111,13 @@ Deno.serve(async (req) => {
   const chosen: Listing[] = [];
 
   for (const cat of QUOTAS) {
-    const load = async (firstSeenBefore: string) => {
-      const { data, error } = await db.from('listings')
+    const load = async (firstSeenBefore: string, ignoreChecked = false) => {
+      let q = db.from('listings')
         .select('id, category, region, location, attributes, title_hint, photo_urls, source, source_url, price_eur, quality')
         .eq('category', cat).eq('status', 'active').gte('quality', 0)
-        .lt('first_seen_at', firstSeenBefore).gt('checked_at', checkedAfter)
-        .limit(5000);
+        .lt('first_seen_at', firstSeenBefore);
+      if (!ignoreChecked) q = q.gt('checked_at', checkedAfter);
+      const { data, error } = await q.limit(5000);
       if (error) throw error;
       return (data as Listing[]).filter((l) => !used.has(l.id) && !chosen.some((c) => c.id === l.id));
     };
@@ -129,6 +130,11 @@ Deno.serve(async (req) => {
       // last resort (young pool, e.g. right after launch): anything active
       warnings.push(`daily_pool_young:${cat}:${pool.length}`);
       pool = await load(new Date(nowMs + 60_000).toISOString());
+    }
+    if (pool.length < 5) {
+      // scraper has not re-checked anything recently (outage): ignore checked_at rather than ship no daily
+      warnings.push(`daily_pool_stale:${cat}:${pool.length}`);
+      pool = await load(new Date(nowMs + 60_000).toISOString(), true);
     }
     if (cat === 'flats') {
       const first = chosen.find((c) => c.category === 'flats');

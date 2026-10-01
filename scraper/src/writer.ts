@@ -118,15 +118,21 @@ export function createWriter(sb: SupabaseClient = createSupabase()): Writer {
     },
 
     async touch(urls) {
-      if (!urls.length) return;
-      fail('touch', (await sb.from('listings').update({ checked_at: new Date().toISOString() }).in('source_url', urls)).error);
+      // ~70-char URLs in a GET-style filter: keep each request well under the query-string limit
+      for (let i = 0; i < urls.length; i += 60) {
+        fail('touch', (await sb.from('listings').update({ checked_at: new Date().toISOString() }).in('source_url', urls.slice(i, i + 60))).error);
+      }
     },
 
     async expire(urls) {
       if (!urls.length) return 0;
-      const { data, error } = await sb.from('listings').update({ status: 'expired', checked_at: new Date().toISOString() }).in('source_url', urls).eq('status', 'active').select('id');
-      fail('expire', error);
-      return data?.length ?? 0;
+      let n = 0;
+      for (let i = 0; i < urls.length; i += 60) {
+        const { data, error } = await sb.from('listings').update({ status: 'expired', checked_at: new Date().toISOString() }).in('source_url', urls.slice(i, i + 60)).eq('status', 'active').select('id');
+        fail('expire', error);
+        n += data?.length ?? 0;
+      }
+      return n;
     },
 
     async dueForRecheck(limit, olderThanDays) {
