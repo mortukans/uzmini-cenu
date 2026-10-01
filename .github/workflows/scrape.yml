@@ -28,3 +28,8 @@ jobs:
       - name: Stats
         if: always()
         run: cd scraper && npx tsx src/index.ts stats
+      - name: Health check (fails the job if the scrape wrote nothing or today's daily is missing)
+        if: always()
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: cd tools/db && npm ci --silent && node health.mjs
