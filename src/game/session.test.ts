@@ -154,3 +154,88 @@ describe('startSession (solo / streak)', () => {
     expect(rpc.getRounds).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('photosUnavailable (dead photos: CDN serves a 1×1 GIF)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    rpc.getRounds.mockReset();
+    rpc.getDaily.mockReset();
+    image.prefetch.mockReset().mockResolvedValue(true);
+    sessionActions.reset();
+  });
+  afterEach(() => { sessionActions.reset(); vi.useRealTimers(); });
+
+  it('solo: discards the round without consuming a skip, scoring, or advancing roundNo', async () => {
+    rpc.getRounds.mockResolvedValue(pool(10));
+    await sessionActions.startSession({ mode: 'solo', category: 'flats', sessionId: 'solo:flats' });
+    await flush(); await flush();
+    expect(useSession.getState().phase).toBe('GUESSING');
+    expect(useSession.getState().rounds[0]?.id).toBe(1);
+
+    sessionActions.photosUnavailable();
+    await flush(); await flush();
+    const s = useSession.getState();
+    expect(s.rounds[0]?.id).toBe(2);
+    expect(s.skipsUsed).toBe(0);
+    expect(s.roundNo).toBe(1);
+    expect(s.outcomes).toHaveLength(0);
+    expect(s.phase).toBe('GUESSING'); // the next round staged and its prefetch resolved
+  });
+
+  it('streak: keeps the streak counter and refills the pool once it runs low', async () => {
+    rpc.getRounds.mockResolvedValueOnce(pool(4)).mockResolvedValue(pool(10, 100));
+    await sessionActions.startSession({ mode: 'streak', category: 'cars', sessionId: 'streak:cars', streak: 7 });
+    await flush(); await flush();
+    expect(useSession.getState().streak).toBe(7);
+
+    sessionActions.photosUnavailable();
+    await flush(); await flush();
+    const s = useSession.getState();
+    expect(s.rounds[0]?.id).toBe(2);
+    expect(s.streak).toBe(7);
+    expect(s.streakOver).toBe(false);
+    expect(s.skipsUsed).toBe(0);
+    expect(rpc.getRounds).toHaveBeenCalledTimes(2); // 3 left < REFILL_BELOW → topped up
+    expect(s.rounds.some((r) => r.id === 100)).toBe(true);
+  });
+
+  it('daily (fixed set): the round stays; the carousel shows the placeholder instead', async () => {
+    rpc.getDaily.mockResolvedValue({ day: '2026-10-01', number: 37, rounds: pool(5), already_played: false, result: null });
+    await sessionActions.startSession({ mode: 'daily', sessionId: 'daily' });
+    await flush(); await flush();
+    expectPlaying();
+    expect(useSession.getState().rounds[0]?.id).toBe(1);
+
+    sessionActions.photosUnavailable();
+    await flush();
+    const s = useSession.getState();
+    expect(s.rounds[0]?.id).toBe(1);
+    expect(s.rounds).toHaveLength(5);
+    expectPlaying();
+  });
+
+  it('practice (bundled pool): never discards the last round into an unfillable LOADING', async () => {
+    await sessionActions.startSession({ mode: 'solo', category: 'all', sessionId: 'onboarding', rounds: pool(2), localScoring: true, totalRounds: 2 });
+    await flush(); await flush();
+    sessionActions.photosUnavailable(); // 2 left → drop one
+    await flush(); await flush();
+    expect(useSession.getState().rounds.map((r) => r.id)).toEqual([2]);
+    sessionActions.photosUnavailable(); // last one: keep it with the placeholder
+    await flush();
+    expect(useSession.getState().rounds.map((r) => r.id)).toEqual([2]);
+    expectPlaying();
+    expect(rpc.getRounds).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op outside STAGED/GUESSING (e.g. while a guess is being submitted)', async () => {
+    rpc.getRounds.mockResolvedValue(pool(10));
+    rpc.submitGuess.mockReturnValue(new Promise(() => {}));
+    await sessionActions.startSession({ mode: 'solo', category: 'all', sessionId: 'solo:all' });
+    await flush(); await flush();
+    sessionActions.submit(50000);
+    expect(useSession.getState().phase).toBe('SUBMITTING');
+    sessionActions.photosUnavailable();
+    expect(useSession.getState().phase).toBe('SUBMITTING');
+    expect(useSession.getState().rounds[0]?.id).toBe(1);
+  });
+});

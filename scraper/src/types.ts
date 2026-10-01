@@ -104,6 +104,8 @@ export type RejectCode =
   | 'price_not_eur'
   | 'missing_attr'
   | 'few_photos'
+  /** First photo URL is dead on i.ss.com (non-200, tiny body, or not a JPEG): SS removed the ad's photos. */
+  | 'photo_dead'
   | 'no_year'
   | 'deal_rent'
   | 'deal_buy'

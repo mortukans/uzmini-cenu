@@ -25,6 +25,13 @@ export interface ListingRow {
   first_seen_at?: string;
 }
 
+/** A row the rechecker re-verifies; `photo_urls` lets it HEAD the photo the app actually shows. */
+export interface RecheckTarget {
+  source_url: string;
+  category: SsCategory;
+  photo_urls?: string[] | null;
+}
+
 export interface Writer {
   upsertActive(listings: ParsedListing[]): Promise<{ inserted: number; updated: number }>;
   writeRejected(listing: ParsedListing, code: RejectCode, dupOf?: number): Promise<void>;
@@ -32,8 +39,10 @@ export interface Writer {
   activeCandidates(category: SsCategory): Promise<ExistingRow[]>;
   touch(urls: string[]): Promise<void>;
   expire(urls: string[]): Promise<number>;
-  dueForRecheck(limit: number, olderThanDays: number): Promise<{ source_url: string; category: SsCategory }[]>;
-  dailyCandidates(limit: number): Promise<{ source_url: string; category: SsCategory }[]>;
+  /** Like `expire`, plus `attributes.reject_reason = 'photo_dead'` so the pick / audits can tell why. */
+  expirePhotoDead(urls: string[]): Promise<number>;
+  dueForRecheck(limit: number, olderThanDays: number): Promise<RecheckTarget[]>;
+  dailyCandidates(limit: number): Promise<RecheckTarget[]>;
   startRun(source: string, notes?: string): Promise<number>;
   finishRun(id: number, stats: Partial<ScrapeRunRow>): Promise<void>;
   lastBlockedUntil(source: string): Promise<string | null>;
@@ -135,11 +144,27 @@ export function createWriter(sb: SupabaseClient = createSupabase()): Writer {
       return n;
     },
 
+    async expirePhotoDead(urls) {
+      if (!urls.length) return 0;
+      let n = 0;
+      // PostgREST has no jsonb `||` in an update: read the attributes, merge, write per row.
+      for (let i = 0; i < urls.length; i += 60) {
+        const { data, error } = await sb.from('listings').select('id, attributes').in('source_url', urls.slice(i, i + 60)).eq('status', 'active');
+        fail('expirePhotoDead', error);
+        for (const r of data ?? []) {
+          const attributes = { ...((r.attributes as Record<string, unknown> | null) ?? {}), reject_reason: 'photo_dead' };
+          fail('expirePhotoDead', (await sb.from('listings').update({ status: 'expired', checked_at: new Date().toISOString(), attributes }).eq('id', r.id)).error);
+          n++;
+        }
+      }
+      return n;
+    },
+
     async dueForRecheck(limit, olderThanDays) {
       const cutoff = new Date(Date.now() - olderThanDays * 86_400_000).toISOString();
-      const { data, error } = await sb.from('listings').select('source_url, category').eq('status', 'active').lt('checked_at', cutoff).order('checked_at', { ascending: true }).limit(limit);
+      const { data, error } = await sb.from('listings').select('source_url, category, photo_urls').eq('status', 'active').lt('checked_at', cutoff).order('checked_at', { ascending: true }).limit(limit);
       fail('dueForRecheck', error);
-      return (data ?? []) as { source_url: string; category: SsCategory }[];
+      return (data ?? []) as RecheckTarget[];
     },
 
     async dailyCandidates(limit) {
@@ -148,8 +173,8 @@ export function createWriter(sb: SupabaseClient = createSupabase()): Writer {
       const { data, error } = await sb.from('daily_sets').select('listing_ids').eq('day', tomorrow).maybeSingle();
       if (error || !data?.listing_ids?.length) return [];
       const ids = (data.listing_ids as number[]).slice(0, limit);
-      const { data: rows } = await sb.from('listings').select('source_url, category').in('id', ids);
-      return (rows ?? []) as { source_url: string; category: SsCategory }[];
+      const { data: rows } = await sb.from('listings').select('source_url, category, photo_urls').in('id', ids);
+      return (rows ?? []) as RecheckTarget[];
     },
 
     async startRun(source, notes) {
@@ -232,12 +257,25 @@ export function createMemoryWriter(): Writer & { rows: Map<string, ListingRow & 
       }
       return n;
     },
+    async expirePhotoDead(urls) {
+      let n = 0;
+      for (const u of urls) {
+        const r = rows.get(u);
+        if (r && r.status === 'active') {
+          r.status = 'expired';
+          r.checked_at = new Date().toISOString();
+          r.attributes = { ...r.attributes, reject_reason: 'photo_dead' };
+          n++;
+        }
+      }
+      return n;
+    },
     async dueForRecheck(limit, olderThanDays) {
       const cutoff = Date.now() - olderThanDays * 86_400_000;
       return [...rows.values()]
         .filter((r) => r.status === 'active' && Date.parse(r.checked_at) < cutoff)
         .slice(0, limit)
-        .map((r) => ({ source_url: r.source_url, category: r.category }));
+        .map((r) => ({ source_url: r.source_url, category: r.category, photo_urls: r.photo_urls }));
     },
     async dailyCandidates() {
       return [];

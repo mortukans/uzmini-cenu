@@ -92,7 +92,8 @@
     "submit_retrying": "Не удалось отправить, пробуем ещё…",
     "leave_title": "Выйти из игры?",
     "leave_body": "Прогресс сохранится.",
-    "leave_confirm": "Выйти"
+    "leave_confirm": "Выйти",
+    "photo_unavailable": "Фото недоступно"
   },
   "keypad": {
     "empty": "Введи цену",

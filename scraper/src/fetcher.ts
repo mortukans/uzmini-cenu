@@ -80,6 +80,42 @@ export function isAllowedUrl(url: string): boolean {
   return true;
 }
 
+/** Photo CDN. Photos are only ever HEADed (never downloaded): docs/09, CLAUDE.md. */
+export const PHOTO_ORIGIN = 'https://i.ss.com';
+/** A real `.800.jpg` is tens of kB; the "photo removed" tombstone is a 49-byte GIF. */
+export const MIN_PHOTO_BYTES = 2000;
+
+export interface HeadResult {
+  url: string;
+  status: number;
+  /** `content-length` as a number; null when the header is missing. */
+  contentLength: number | null;
+  contentType: string | null;
+  elapsedMs: number;
+}
+
+/** Only gallery photos on the CDN may be HEADed. */
+export function isAllowedPhotoUrl(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  return u.origin === PHOTO_ORIGIN && u.pathname.startsWith('/gallery/');
+}
+
+/**
+ * Pure: is this HEAD response a live listing photo? When SS removes an ad's
+ * photos, i.ss.com keeps answering 200 — with `image/gif` and 49 bytes.
+ * A missing content-length counts as dead (the CDN always sends it for JPEGs).
+ */
+export function isPhotoAlive(r: Pick<HeadResult, 'status' | 'contentLength' | 'contentType'>): boolean {
+  if (r.status !== 200) return false;
+  if ((r.contentLength ?? 0) < MIN_PHOTO_BYTES) return false;
+  return (r.contentType ?? '').toLowerCase().startsWith('image/jpeg');
+}
+
 export class Fetcher {
   private lastRequestAt = 0;
   readonly stats: FetcherStats = { requests: 0, cacheHits: 0, errors: 0, elapsed: [], zeroAnchorStreak: 0 };
@@ -171,6 +207,47 @@ export class Fetcher {
       if (res.status === 200 && useCache) this.writeCache(url, result);
       return result;
     }
+  }
+
+  /**
+   * HEAD a photo on i.ss.com (liveness only; the body is never fetched). Counts
+   * against the request budget and the politeness interval like any request.
+   * No cache, no retries: a transient failure throws and the caller treats it
+   * as inconclusive. 429 from the CDN is a block signal; a 403/404 is just a
+   * dead photo (SS also 404s removed galleries), so it is returned, not thrown.
+   */
+  async head(url: string): Promise<HeadResult> {
+    if (!isAllowedPhotoUrl(url)) throw new ForbiddenUrlError(`refusing to HEAD ${url}`);
+    if (this.remainingBudget <= 0) throw new BudgetExhaustedError(`nightly budget of ${this.o.budget} requests exhausted`);
+    await this.waitTurn();
+    this.stats.requests++;
+    const t0 = performance.now();
+    let res: Response;
+    try {
+      res = await this.o.fetchImpl(url, {
+        method: 'HEAD',
+        redirect: 'manual',
+        signal: AbortSignal.timeout(this.o.timeoutMs),
+        headers: { 'User-Agent': userAgent(this.o.mailto), Accept: 'image/jpeg,image/*;q=0.8,*/*;q=0.5' },
+      });
+    } catch (e) {
+      this.stats.errors++;
+      this.o.log(`ERR  HEAD ${url} ${(e as Error).message}`);
+      throw e;
+    }
+    const elapsedMs = Math.round(performance.now() - t0);
+    this.stats.elapsed.push(elapsedMs);
+    const len = res.headers.get('content-length');
+    const result: HeadResult = {
+      url,
+      status: res.status,
+      contentLength: len != null && len !== '' && Number.isFinite(Number(len)) ? Number(len) : null,
+      contentType: res.headers.get('content-type'),
+      elapsedMs,
+    };
+    this.o.log(`${res.status} ${String(elapsedMs).padStart(5)}ms ${String(result.contentLength ?? '?').padStart(7)}B HEAD ${url} ${result.contentType ?? ''}`);
+    if (res.status === 429) throw new BlockedError(url, 'status 429 on photo CDN', res.status);
+    return result;
   }
 
   /** Heuristic 5: median of last 20 > 4x median of first 20. */

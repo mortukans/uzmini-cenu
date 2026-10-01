@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildListJobs, pageUrl } from '../src/config.ts';
-import { BlockedError, Fetcher, ForbiddenUrlError, detectBlock, isAllowedUrl } from '../src/fetcher.ts';
+import { BlockedError, Fetcher, ForbiddenUrlError, detectBlock, isAllowedPhotoUrl, isAllowedUrl, isPhotoAlive } from '../src/fetcher.ts';
 
 describe('isAllowedUrl', () => {
   it.each([
@@ -93,6 +93,52 @@ describe('Fetcher (no network: injected fetch)', () => {
     const f = new Fetcher({ cacheDir: null, intervalMs: 0, mailto: 'dev@example.lv', fetchImpl: (async (_u: unknown, init?: RequestInit) => ((ua = (init!.headers as Record<string, string>)['User-Agent']!), mkResponse(200, 'ok'))) as typeof fetch, sleepImpl: async () => {} });
     await f.get('https://www.ss.com/lv/transport/cars/audi/sell/', { useCache: false });
     expect(ua).toBe('UzminiCenuBot/1.0 (+mailto:dev@example.lv)');
+  });
+});
+
+describe('photo HEAD (i.ss.com liveness)', () => {
+  const photo = 'https://i.ss.com/gallery/8/1549/387154/flats-riga-purvciems-77430610.800.jpg';
+
+  it('isAllowedPhotoUrl: only gallery photos on the CDN', () => {
+    expect(isAllowedPhotoUrl(photo)).toBe(true);
+    expect(isAllowedPhotoUrl('https://i.ss.com/other/x.jpg')).toBe(false);
+    expect(isAllowedPhotoUrl('https://www.ss.com/msg/lv/x/y/abcde.html')).toBe(false);
+    expect(isAllowedPhotoUrl('not a url')).toBe(false);
+  });
+
+  it('isPhotoAlive: 200 + image/jpeg + >= 2000 bytes; the 49-byte GIF tombstone is dead', () => {
+    expect(isPhotoAlive({ status: 200, contentLength: 48_213, contentType: 'image/jpeg' })).toBe(true);
+    expect(isPhotoAlive({ status: 200, contentLength: 49, contentType: 'image/gif' })).toBe(false);
+    expect(isPhotoAlive({ status: 200, contentLength: 49, contentType: 'image/jpeg' })).toBe(false);
+    expect(isPhotoAlive({ status: 200, contentLength: 50_000, contentType: 'image/gif' })).toBe(false);
+    expect(isPhotoAlive({ status: 200, contentLength: null, contentType: 'image/jpeg' })).toBe(false);
+    expect(isPhotoAlive({ status: 404, contentLength: 50_000, contentType: 'image/jpeg' })).toBe(false);
+  });
+
+  it('head(): HEAD with the bot UA, parses the headers, counts against the budget', async () => {
+    const seen: { method?: string; ua?: string }[] = [];
+    const f = new Fetcher({
+      cacheDir: null, intervalMs: 0, budget: 1, mailto: 'dev@example.lv', sleepImpl: async () => {},
+      fetchImpl: (async (_u: unknown, init?: RequestInit) => {
+        seen.push({ method: init?.method, ua: (init!.headers as Record<string, string>)['User-Agent'] });
+        return new Response(null, { status: 200, headers: { 'content-type': 'image/gif', 'content-length': '49' } });
+      }) as typeof fetch,
+    });
+    const r = await f.head(photo);
+    expect(seen).toEqual([{ method: 'HEAD', ua: 'UzminiCenuBot/1.0 (+mailto:dev@example.lv)' }]);
+    expect(r).toMatchObject({ status: 200, contentLength: 49, contentType: 'image/gif' });
+    expect(isPhotoAlive(r)).toBe(false);
+    expect(f.stats.requests).toBe(1);
+    await expect(f.head(photo)).rejects.toThrow(/budget/);
+  });
+
+  it('head(): refuses non-CDN URLs without fetching; 429 is a block signal', async () => {
+    let n = 0;
+    const f = new Fetcher({ cacheDir: null, intervalMs: 0, sleepImpl: async () => {}, fetchImpl: (async () => (n++, new Response(null, { status: 429 }))) as typeof fetch });
+    await expect(f.head('https://www.ss.com/msg/lv/x/y/abcde.html')).rejects.toBeInstanceOf(ForbiddenUrlError);
+    expect(n).toBe(0);
+    await expect(f.head(photo)).rejects.toBeInstanceOf(BlockedError);
+    expect(n).toBe(1);
   });
 });
 

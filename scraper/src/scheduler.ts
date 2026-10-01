@@ -8,11 +8,11 @@
  */
 import { buildListJobs, pageUrl, politeness, type ListJob } from './config.ts';
 import { findDuplicate } from './deduper.ts';
-import { BlockedError, BudgetExhaustedError, type Fetcher } from './fetcher.ts';
+import { BlockedError, BudgetExhaustedError, isPhotoAlive, type Fetcher } from './fetcher.ts';
 import { normalise, parsePrice } from './normaliser.ts';
 import { parseDetail, parseList } from './parser/ss.ts';
 import { checkQuality, listStageReject } from './quality.ts';
-import { recheck } from './rechecker.ts';
+import { REQUESTS_PER_RECHECK, recheck } from './rechecker.ts';
 import type { ParsedListing, RawListing, RejectCode, ScrapeRunRow, SsCategory, SsRawListRow } from './types.ts';
 import type { Writer } from './writer.ts';
 
@@ -151,6 +151,24 @@ export async function runNight(fetcher: Fetcher, writer: Writer, opts: RunOption
           continue;
         }
       }
+      // Photo liveness: SS removes an ad's photos first and the CDN then serves a
+      // 1×1 GIF with HTTP 200, so one HEAD of the first photo per accepted row.
+      const photo = q.listing.photo_urls[0];
+      if (photo) {
+        let photoOk: boolean | null;
+        try {
+          photoOk = isPhotoAlive(await fetcher.head(photo));
+        } catch (e) {
+          if (e instanceof BlockedError || e instanceof BudgetExhaustedError) throw e;
+          photoOk = null; // inconclusive (network): keep the row, the recheck catches it later
+        }
+        if (photoOk === false) {
+          bumpReject('photo_dead');
+          opts.onListing?.(q.listing, { ok: false, reject: 'photo_dead' });
+          if (!opts.dryRun) await writer.writeRejected(q.listing, 'photo_dead');
+          continue;
+        }
+      }
       accepted.push(q.listing);
       opts.onListing?.(q.listing, { ok: true });
     }
@@ -162,7 +180,8 @@ export async function runNight(fetcher: Fetcher, writer: Writer, opts: RunOption
 
     // 4. remaining rechecks
     if (!opts.skipRechecks && !opts.dryRun) {
-      const due = await writer.dueForRecheck(Math.min(politeness.recheckBudget, Math.max(0, fetcher.remainingBudget - 5)), politeness.recheckAfterDays);
+      // each recheck may cost two requests (detail page + photo HEAD)
+      const due = await writer.dueForRecheck(Math.min(politeness.recheckBudget, Math.max(0, Math.floor((fetcher.remainingBudget - 5) / REQUESTS_PER_RECHECK))), politeness.recheckAfterDays);
       if (due.length) {
         const s = await recheck(fetcher, writer, due, { log });
         report.expired_rows += s.expired;

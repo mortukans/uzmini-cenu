@@ -99,6 +99,10 @@ export default function PlayScreen() {
     sessionActions.submit(guess);
   }, [guess, s.phase]);
 
+  // Dead photos (SS removed them; CDN serves a 1×1 GIF): solo/streak drop the
+  // round for free, fixed sets keep it behind the placeholder card.
+  const onAllPhotosFailed = useCallback(() => { sessionActions.photosUnavailable(); }, []);
+
   const onNext = useCallback(async () => {
     if (mode === 'solo' && !isOnboarding && (await shouldShowInterstitial(s.roundNo, isPremium, firstSession))) {
       await showInterstitial();
@@ -209,6 +213,7 @@ export default function PlayScreen() {
               listingId={round.id}
               visibleCount={cfg?.allowHints && !s.hintsUsed.includes('photo') ? PHOTOS_BEFORE_HINT : undefined}
               height={220}
+              onAllPhotosFailed={onAllPhotosFailed}
             />
             <ListingHeader round={round} />
             <AttributeChips listing={round} />

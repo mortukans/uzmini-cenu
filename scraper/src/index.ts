@@ -15,7 +15,7 @@ import { Fetcher } from './fetcher.ts';
 import { normalise, rawFromDetail } from './normaliser.ts';
 import { parseDetail, parseList } from './parser/ss.ts';
 import { checkQuality } from './quality.ts';
-import { recheck, recheckDefaults } from './rechecker.ts';
+import { REQUESTS_PER_RECHECK, recheck, recheckDefaults } from './rechecker.ts';
 import { runNight } from './scheduler.ts';
 import type { SsCategory } from './types.ts';
 import { createMemoryWriter, createWriter } from './writer.ts';
@@ -66,7 +66,8 @@ async function cmdRun() {
 
 async function cmdRecheck() {
   requireMailto();
-  const fetcher = new Fetcher({ log, budget: Math.min(politeness.nightlyBudget, (limit ?? recheckDefaults.limit) + 5) });
+  // detail page + photo HEAD per target
+  const fetcher = new Fetcher({ log, budget: Math.min(politeness.nightlyBudget, (limit ?? recheckDefaults.limit) * REQUESTS_PER_RECHECK + 5) });
   const writer = createWriter();
   const targets = await writer.dueForRecheck(limit ?? recheckDefaults.limit, recheckDefaults.olderThanDays);
   log(`${targets.length} listings due for recheck`);

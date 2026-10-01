@@ -91,7 +91,8 @@
     "submit_retrying": "Nevar nosūtīt, mēģinam vēlreiz…",
     "leave_title": "Pamest spēli?",
     "leave_body": "Progress tiks saglabāts.",
-    "leave_confirm": "Pamest"
+    "leave_confirm": "Pamest",
+    "photo_unavailable": "Foto nav pieejams"
   },
   "keypad": {
     "empty": "Ievadi cenu",

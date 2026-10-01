@@ -90,7 +90,8 @@
     "submit_retrying": "Could not submit, retrying…",
     "leave_title": "Leave the game?",
     "leave_body": "Your progress will be saved.",
-    "leave_confirm": "Leave"
+    "leave_confirm": "Leave",
+    "photo_unavailable": "Photo unavailable"
   },
   "keypad": {
     "empty": "Enter a price",

@@ -543,6 +543,26 @@ export const sessionActions = {
     dispatch({ type: 'SKIP' });
   },
   revealDone() { dispatch({ type: 'REVEAL_DONE' }); },
+  /**
+   * The carousel found every photo of the current round dead (SS removed the
+   * ad's photos; i.ss.com serves a 1×1 GIF). Solo/streak/practice: drop the
+   * round like a bad token — no skip consumed, no score, streak untouched —
+   * and the STAGED side effects refill the pool. Fixed sets (daily/duel/room)
+   * keep the round: the carousel shows the placeholder card instead.
+   */
+  photosUnavailable() {
+    const s = useSession.getState();
+    const cfg = s.config;
+    if (!cfg) return;
+    const r = currentRound(s);
+    track('round_photos_unavailable', { listing_id: r?.id, mode: cfg.mode });
+    if (cfg.mode !== 'solo' && cfg.mode !== 'streak') return;
+    if (s.phase !== 'STAGED' && s.phase !== 'GUESSING') return;
+    // A bundled / pre-supplied pool (practice) cannot be refilled: keep the
+    // last round with its placeholder rather than falling into LOADING → timeout.
+    if (s.rounds.length <= 1 && !ownsTokens()) return;
+    dispatch({ type: 'DISCARD_ROUND' });
+  },
   retry() {
     const s = useSession.getState();
     if (s.prevPhase === 'LOADING') { dispatch({ type: 'RETRY' }); if (s.config?.mode === 'daily') void loadDaily(generation, s.config); else void ensurePool(); return; }
