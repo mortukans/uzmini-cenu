@@ -8,12 +8,16 @@ on:
       limit:
         description: 'max detail pages'
         default: '900'
+      minutes:
+        description: 'wall-clock budget for the run'
+        default: '100'
 
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # the scraper stops itself at --minutes; this is only the safety net
+    timeout-minutes: 150
     env:
       SUPABASE_URL: https://szlqqshbuswezepvnzsb.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -24,7 +28,7 @@ jobs:
         with: { node-version: 22 }
       - run: cd scraper && npm ci
       - name: Scrape
-        run: cd scraper && npx tsx src/index.ts run --limit ${{ github.event.inputs.limit || '900' }}
+        run: cd scraper && npx tsx src/index.ts run --limit ${{ github.event.inputs.limit || '900' }} --minutes ${{ github.event.inputs.minutes || '100' }}
       - name: Stats
         if: always()
         run: cd scraper && npx tsx src/index.ts stats

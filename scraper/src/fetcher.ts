@@ -20,11 +20,19 @@ export class BlockedError extends Error {
   }
 }
 export class BudgetExhaustedError extends Error {}
+/** The run's wall-clock deadline passed: no further requests are made. */
+export class DeadlineError extends Error {}
 export class ForbiddenUrlError extends Error {}
 
 export interface FetcherOptions {
   intervalMs?: number;
   jitterMs?: number;
+  /** Spacing between photo HEADs (CDN host); default politeness.headIntervalMs. */
+  headIntervalMs?: number;
+  /** Epoch ms after which get()/head() throw DeadlineError; null = no deadline. */
+  deadlineAt?: number | null;
+  /** injectable clock for tests */
+  nowImpl?: () => number;
   timeoutMs?: number;
   budget?: number;
   cacheDir?: string | null; // null disables the cache
@@ -118,13 +126,17 @@ export function isPhotoAlive(r: Pick<HeadResult, 'status' | 'contentLength' | 'c
 
 export class Fetcher {
   private lastRequestAt = 0;
+  private lastHeadAt = 0;
   readonly stats: FetcherStats = { requests: 0, cacheHits: 0, errors: 0, elapsed: [], zeroAnchorStreak: 0 };
-  private readonly o: Required<Omit<FetcherOptions, 'cacheDir'>> & { cacheDir: string | null };
+  private readonly o: Required<Omit<FetcherOptions, 'cacheDir' | 'deadlineAt'>> & { cacheDir: string | null; deadlineAt: number | null };
 
   constructor(opts: FetcherOptions = {}) {
     this.o = {
       intervalMs: opts.intervalMs ?? politeness.intervalMs,
       jitterMs: opts.jitterMs ?? politeness.jitterMs,
+      headIntervalMs: opts.headIntervalMs ?? politeness.headIntervalMs,
+      deadlineAt: opts.deadlineAt ?? null,
+      nowImpl: opts.nowImpl ?? (() => Date.now()),
       timeoutMs: opts.timeoutMs ?? politeness.timeoutMs,
       budget: opts.budget ?? politeness.nightlyBudget,
       cacheDir: opts.cacheDir === undefined ? env.cacheDir : opts.cacheDir,
@@ -142,6 +154,19 @@ export class Fetcher {
     return this.o.budget - this.stats.requests;
   }
 
+  /** Milliseconds until the deadline (Infinity without one; negative once passed). */
+  get timeLeftMs(): number {
+    return this.o.deadlineAt == null ? Infinity : this.o.deadlineAt - this.o.nowImpl();
+  }
+
+  get pastDeadline(): boolean {
+    return this.timeLeftMs <= 0;
+  }
+
+  private checkDeadline() {
+    if (this.pastDeadline) throw new DeadlineError(`run deadline reached (${new Date(this.o.deadlineAt!).toISOString()})`);
+  }
+
   /** GET with cache, politeness, retries (network/5xx/timeout only) and block detection. */
   async get(url: string, { useCache = true, allowRetry = true }: { useCache?: boolean; allowRetry?: boolean } = {}): Promise<FetchResult> {
     if (!isAllowedUrl(url)) throw new ForbiddenUrlError(`refusing to fetch ${url}`);
@@ -155,6 +180,7 @@ export class Fetcher {
     let attempt = 0;
     for (;;) {
       if (this.remainingBudget <= 0) throw new BudgetExhaustedError(`nightly budget of ${this.o.budget} requests exhausted`);
+      this.checkDeadline();
       await this.waitTurn();
       this.stats.requests++;
       const t0 = performance.now();
@@ -211,15 +237,19 @@ export class Fetcher {
 
   /**
    * HEAD a photo on i.ss.com (liveness only; the body is never fetched). Counts
-   * against the request budget and the politeness interval like any request.
-   * No cache, no retries: a transient failure throws and the caller treats it
-   * as inconclusive. 429 from the CDN is a block signal; a 403/404 is just a
-   * dead photo (SS also 404s removed galleries), so it is returned, not thrown.
+   * against the request budget and the deadline like any request, but is
+   * spaced by `headIntervalMs` on its own clock: the CDN is a different host
+   * and a HEAD costs it almost nothing, so it does not consume the page
+   * interval. No cache, no retries: a transient failure throws and the caller
+   * treats it as inconclusive. 429 from the CDN is a block signal; a 403/404
+   * is just a dead photo (SS also 404s removed galleries), so it is returned,
+   * not thrown.
    */
   async head(url: string): Promise<HeadResult> {
     if (!isAllowedPhotoUrl(url)) throw new ForbiddenUrlError(`refusing to HEAD ${url}`);
     if (this.remainingBudget <= 0) throw new BudgetExhaustedError(`nightly budget of ${this.o.budget} requests exhausted`);
-    await this.waitTurn();
+    this.checkDeadline();
+    await this.waitHeadTurn();
     this.stats.requests++;
     const t0 = performance.now();
     let res: Response;
@@ -263,6 +293,12 @@ export class Fetcher {
     const wait = this.lastRequestAt + this.o.intervalMs + jitter - Date.now();
     if (wait > 0) await this.o.sleepImpl(wait);
     this.lastRequestAt = Date.now();
+  }
+
+  private async waitHeadTurn() {
+    const wait = this.lastHeadAt + this.o.headIntervalMs - Date.now();
+    if (wait > 0) await this.o.sleepImpl(wait);
+    this.lastHeadAt = Date.now();
   }
 
   // ─── disk cache (7 d) ──────────────────────────────────────────────────────

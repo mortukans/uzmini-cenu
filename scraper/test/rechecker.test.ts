@@ -124,3 +124,36 @@ describe('runNight: new listings are HEAD-checked at ingest', () => {
     expect([...w.rows.values()].filter((r) => r.status === 'active')).toHaveLength(1);
   });
 });
+
+describe('runNight: wall-clock deadline', () => {
+  it('stops taking detail pages when less than the recheck reserve is left, and finishes cleanly', async () => {
+    const calls: { method: string; url: string }[] = [];
+    // 10 minutes left (< politeness.recheckReserveMs = 30 min): list stage runs, detail stage is cut at once
+    const f = new Fetcher({ ...quiet, fetchImpl: fakeFetch(jpegHead, calls), deadlineAt: 10 * 60_000, nowImpl: () => 0 });
+    const w = createMemoryWriter();
+    const report = await runNight(f, w, { categories: ['flats'], limit: 5 });
+    expect(report.listPages).toBeGreaterThan(0);
+    expect(report.detailPages).toBe(0);
+    expect(report.new_rows).toBe(0);
+    expect(report.notes).toMatch(/detail stage cut after 0\//);
+    expect(calls.filter((c) => c.method === 'HEAD')).toHaveLength(0);
+  });
+
+  it('a deadline hit mid-way still writes the rows accepted so far and records it in notes', async () => {
+    let now = 0;
+    const calls: { method: string; url: string }[] = [];
+    const inner = fakeFetch(jpegHead, calls);
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      const r = await inner(input, init);
+      if (init?.method === 'HEAD') now = 5000; // the clock passes the deadline right after the first photo check
+      return r;
+    }) as typeof fetch;
+    const f = new Fetcher({ ...quiet, fetchImpl, deadlineAt: 1000, nowImpl: () => now });
+    const w = createMemoryWriter();
+    const report = await runNight(f, w, { categories: ['flats'], limit: 3, skipRechecks: true });
+    expect(report.detailPages).toBe(1); // second detail page refused by the deadline
+    expect(report.new_rows).toBe(1);
+    expect([...w.rows.values()].filter((r) => r.status === 'active')).toHaveLength(1);
+    expect(report.notes).toMatch(/run deadline reached/);
+  });
+});

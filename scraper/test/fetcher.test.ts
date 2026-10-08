@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildListJobs, pageUrl } from '../src/config.ts';
-import { BlockedError, Fetcher, ForbiddenUrlError, detectBlock, isAllowedPhotoUrl, isAllowedUrl, isPhotoAlive } from '../src/fetcher.ts';
+import { BlockedError, DeadlineError, Fetcher, ForbiddenUrlError, detectBlock, isAllowedPhotoUrl, isAllowedUrl, isPhotoAlive } from '../src/fetcher.ts';
 
 describe('isAllowedUrl', () => {
   it.each([
@@ -155,5 +155,40 @@ describe('config crawl plan', () => {
     expect(pages).toBeLessThan(200);
     expect(pageUrl(jobs[0]!.url, 1)).toBe(jobs[0]!.url);
     expect(pageUrl(jobs[0]!.url, 3)).toBe(`${jobs[0]!.url}page3.html`);
+  });
+});
+
+describe('wall-clock deadline', () => {
+  const photo = 'https://i.ss.com/gallery/8/1549/387154/flats-riga-purvciems-77430610.800.jpg';
+  const ok = (async () => new Response('<html>ok</html>', { status: 200 })) as typeof fetch;
+
+  it('get()/head() throw DeadlineError once the deadline has passed, without fetching', async () => {
+    let now = 0;
+    let n = 0;
+    const f = new Fetcher({ cacheDir: null, intervalMs: 0, sleepImpl: async () => {}, deadlineAt: 1000, nowImpl: () => now, fetchImpl: (async () => (n++, new Response(null, { status: 200, headers: { 'content-type': 'image/jpeg', 'content-length': '50000' } }))) as typeof fetch });
+    expect(f.timeLeftMs).toBe(1000);
+    expect(f.pastDeadline).toBe(false);
+    await f.head(photo);
+    now = 1000;
+    expect(f.pastDeadline).toBe(true);
+    await expect(f.head(photo)).rejects.toBeInstanceOf(DeadlineError);
+    await expect(f.get('https://www.ss.com/lv/real-estate/flats/riga/purvciems/sell/')).rejects.toBeInstanceOf(DeadlineError);
+    expect(n).toBe(1);
+  });
+
+  it('no deadline by default: timeLeftMs is Infinity', async () => {
+    const f = new Fetcher({ cacheDir: null, intervalMs: 0, sleepImpl: async () => {}, fetchImpl: ok });
+    expect(f.timeLeftMs).toBe(Infinity);
+    expect(f.pastDeadline).toBe(false);
+  });
+
+  it('photo HEADs are spaced by headIntervalMs on their own clock, not by the page interval', async () => {
+    const sleeps: number[] = [];
+    const f = new Fetcher({ cacheDir: null, intervalMs: 2500, jitterMs: 0, headIntervalMs: 300, sleepImpl: async (ms) => void sleeps.push(ms), fetchImpl: (async () => new Response(null, { status: 200, headers: { 'content-type': 'image/jpeg', 'content-length': '50000' } })) as typeof fetch });
+    await f.head(photo);
+    await f.head(photo);
+    expect(sleeps).toHaveLength(1);
+    expect(sleeps[0]!).toBeGreaterThan(0);
+    expect(sleeps[0]!).toBeLessThanOrEqual(300);
   });
 });

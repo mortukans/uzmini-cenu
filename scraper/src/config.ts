@@ -30,6 +30,19 @@ export const politeness = {
   nightlyBudget: 3000, // hard stop
   detailBudget: 1800,
   recheckBudget: 600,
+  /**
+   * Photo HEADs go to i.ss.com (a CDN, not the page server) and carry no body,
+   * so they keep their own, much shorter spacing instead of the page interval.
+   */
+  headIntervalMs: 300,
+  /**
+   * Wall-clock budget for one `run`. GitHub Actions kills the job at its
+   * timeout, which skipped the expiry stage for four nights in a row (Oct 4-7,
+   * 2026): the fetcher refuses new requests past the deadline and the scheduler
+   * stops fetching details early so rechecks always get `recheckReserveMs`.
+   */
+  runBudgetMs: 100 * 60_000,
+  recheckReserveMs: 30 * 60_000,
   workers: 1, // strictly serial
   /** docs/03 retry table: network / 5xx / timeout */
   retryDelaysMs: [10_000, 60_000, 300_000],

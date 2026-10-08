@@ -1,8 +1,11 @@
 #!/usr/bin/env -S npx tsx
 /**
  * CLI
- *   scrape run [--category flats,cars] [--dry-run] [--limit N] [--no-recheck]
- *   scrape recheck [--limit N] [--dry-run]
+ *   scrape run [--category flats,cars] [--dry-run] [--limit N] [--minutes M] [--no-recheck]
+ *   scrape recheck [--limit N] [--minutes M] [--dry-run]
+ *
+ * --minutes is the wall-clock budget (default politeness.runBudgetMs); the run
+ * stops fetching at the deadline and still writes what it has (env: SCRAPER_MINUTES).
  *   scrape stats
  *   scrape parse <file.html> [--category cars] [--url https://www.ss.com/msg/lv/...]   (offline, for fixtures)
  *
@@ -37,6 +40,8 @@ for (let i = 0; i < rest.length; i++) {
 }
 const dryRun = flags['dry-run'] === true;
 const limit = typeof flags['limit'] === 'string' ? Number(flags['limit']) : process.env.SCRAPER_LIMIT ? Number(process.env.SCRAPER_LIMIT) : undefined;
+const minutes = typeof flags['minutes'] === 'string' ? Number(flags['minutes']) : process.env.SCRAPER_MINUTES ? Number(process.env.SCRAPER_MINUTES) : politeness.runBudgetMs / 60_000;
+const deadlineAt = Number.isFinite(minutes) && minutes > 0 ? Date.now() + minutes * 60_000 : null;
 const categories = typeof flags['category'] === 'string' ? z.array(Category).parse(flags['category'].split(',')) : undefined;
 const log = (s: string) => console.error(`[${new Date().toISOString().slice(11, 19)}] ${s}`);
 
@@ -49,7 +54,8 @@ function requireMailto() {
 
 async function cmdRun() {
   requireMailto();
-  const fetcher = new Fetcher({ log });
+  const fetcher = new Fetcher({ log, deadlineAt });
+  if (deadlineAt) log(`deadline ${new Date(deadlineAt).toISOString()} (${minutes} min)`);
   const writer = dryRun ? createMemoryWriter() : createWriter();
   const report = await runNight(fetcher, writer, {
     categories,
@@ -67,7 +73,7 @@ async function cmdRun() {
 async function cmdRecheck() {
   requireMailto();
   // detail page + photo HEAD per target
-  const fetcher = new Fetcher({ log, budget: Math.min(politeness.nightlyBudget, (limit ?? recheckDefaults.limit) * REQUESTS_PER_RECHECK + 5) });
+  const fetcher = new Fetcher({ log, deadlineAt, budget: Math.min(politeness.nightlyBudget, (limit ?? recheckDefaults.limit) * REQUESTS_PER_RECHECK + 5) });
   const writer = createWriter();
   const targets = await writer.dueForRecheck(limit ?? recheckDefaults.limit, recheckDefaults.olderThanDays);
   log(`${targets.length} listings due for recheck`);

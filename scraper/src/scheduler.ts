@@ -3,12 +3,18 @@
  *   1. rechecks of tomorrow's daily-set candidates
  *   2. list pages (all categories, interleaved so one broken tree does not eat the budget)
  *   3. detail pages for new rows that passed the list-stage filter
- *   4. remaining rechecks (cut first if the budget runs out)
+ *   4. remaining rechecks (cut first if the request budget runs out)
  * A block signal stops everything and records `blocked_until`.
+ *
+ * Wall clock: the fetcher carries the run deadline (politeness.runBudgetMs).
+ * Stage 3 stops taking new detail pages once less than `recheckReserveMs` is
+ * left so stage 4 always runs; stage 4 sizes its batch to the time left; and a
+ * DeadlineError anywhere ends the run cleanly (accepted rows are still written,
+ * the run row is still finished) instead of the CI job being killed mid-way.
  */
 import { buildListJobs, pageUrl, politeness, type ListJob } from './config.ts';
 import { findDuplicate } from './deduper.ts';
-import { BlockedError, BudgetExhaustedError, isPhotoAlive, type Fetcher } from './fetcher.ts';
+import { BlockedError, BudgetExhaustedError, DeadlineError, isPhotoAlive, type Fetcher } from './fetcher.ts';
 import { normalise, parsePrice } from './normaliser.ts';
 import { parseDetail, parseList } from './parser/ss.ts';
 import { checkQuality, listStageReject } from './quality.ts';
@@ -116,8 +122,16 @@ export async function runNight(fetcher: Fetcher, writer: Writer, opts: RunOption
     const detailBudget = Math.min(opts.limit ?? politeness.detailBudget, politeness.detailBudget);
     const accepted: ParsedListing[] = [];
     const activeByCat = new Map<SsCategory, Awaited<ReturnType<Writer['activeCandidates']>>>();
+    let deadlineHit: DeadlineError | undefined;
 
+    const detailLoop = async () => {
     for (const c of fresh.slice(0, detailBudget)) {
+      if (!opts.skipRechecks && fetcher.timeLeftMs < politeness.recheckReserveMs) {
+        // leave the reserve for stage 4: expiry matters more than more rows
+        report.notes = `detail stage cut after ${report.detailPages}/${Math.min(fresh.length, detailBudget)}: ${Math.round(fetcher.timeLeftMs / 60_000)} min left`;
+        log(report.notes);
+        break;
+      }
       const r = await fetcher.get(c.row.sourceUrl);
       report.detailPages++;
       if (r.status === 404) {
@@ -159,7 +173,7 @@ export async function runNight(fetcher: Fetcher, writer: Writer, opts: RunOption
         try {
           photoOk = isPhotoAlive(await fetcher.head(photo));
         } catch (e) {
-          if (e instanceof BlockedError || e instanceof BudgetExhaustedError) throw e;
+          if (e instanceof BlockedError || e instanceof BudgetExhaustedError || e instanceof DeadlineError) throw e;
           photoOk = null; // inconclusive (network): keep the row, the recheck catches it later
         }
         if (photoOk === false) {
@@ -172,20 +186,33 @@ export async function runNight(fetcher: Fetcher, writer: Writer, opts: RunOption
       accepted.push(q.listing);
       opts.onListing?.(q.listing, { ok: true });
     }
+    };
+    try {
+      await detailLoop();
+    } catch (e) {
+      if (!(e instanceof DeadlineError)) throw e;
+      deadlineHit = e; // rows accepted so far are written below
+    }
     if (!opts.dryRun && accepted.length) {
       const w = await writer.upsertActive(accepted);
       report.new_rows += w.inserted;
       report.updated_rows += w.updated + candidates.length - fresh.length;
     } else report.new_rows = accepted.length;
+    if (deadlineHit) throw deadlineHit;
 
-    // 4. remaining rechecks
+    // 4. remaining rechecks: bounded by the request budget AND the time left
     if (!opts.skipRechecks && !opts.dryRun) {
       // each recheck may cost two requests (detail page + photo HEAD)
-      const due = await writer.dueForRecheck(Math.min(politeness.recheckBudget, Math.max(0, Math.floor((fetcher.remainingBudget - 5) / REQUESTS_PER_RECHECK))), politeness.recheckAfterDays);
+      const byRequests = Math.floor((fetcher.remainingBudget - 5) / REQUESTS_PER_RECHECK);
+      const msPerRecheck = politeness.intervalMs + politeness.headIntervalMs + 1500; // + typical latency
+      const byTime = Number.isFinite(fetcher.timeLeftMs) ? Math.floor((fetcher.timeLeftMs - 60_000) / msPerRecheck) : Infinity;
+      const due = await writer.dueForRecheck(Math.max(0, Math.min(politeness.recheckBudget, byRequests, byTime)), politeness.recheckAfterDays);
       if (due.length) {
+        log(`recheck stage: ${due.length} due (budget ${byRequests}, time ${byTime})`);
         const s = await recheck(fetcher, writer, due, { log });
         report.expired_rows += s.expired;
         report.errors += s.errors;
+        log(`rechecked: ${JSON.stringify(s)}`);
       }
     }
   } catch (e) {
@@ -194,9 +221,9 @@ export async function runNight(fetcher: Fetcher, writer: Writer, opts: RunOption
       report.blocked_until = new Date(Date.now() + politeness.blockHours * 3600_000).toISOString();
       report.notes = `BLOCKED: ${e.reason} on ${e.url}. Hard stop; no retries, no IP change.`;
       log(report.notes);
-    } else if (e instanceof BudgetExhaustedError) {
-      report.notes = e.message;
-      log(report.notes);
+    } else if (e instanceof BudgetExhaustedError || e instanceof DeadlineError) {
+      report.notes = `${report.notes ? `${report.notes}; ` : ''}${e.message}`;
+      log(e.message);
     } else {
       report.errors++;
       report.notes = `crash: ${(e as Error).message}`;

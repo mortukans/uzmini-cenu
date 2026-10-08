@@ -10,7 +10,7 @@
  * 'photo_dead'`. Each target therefore costs up to two requests of the budget.
  */
 import { politeness } from './config.ts';
-import { BlockedError, BudgetExhaustedError, isPhotoAlive, type Fetcher } from './fetcher.ts';
+import { BlockedError, BudgetExhaustedError, DeadlineError, isPhotoAlive, type Fetcher } from './fetcher.ts';
 import { parsePrice } from './normaliser.ts';
 import { detailIsGone, parseDetail } from './parser/ss.ts';
 import type { RecheckTarget, Writer } from './writer.ts';
@@ -45,7 +45,7 @@ export async function recheck(
       try {
         r = await fetcher.get(t.source_url, { useCache: false });
       } catch (e) {
-        if (e instanceof BlockedError || e instanceof BudgetExhaustedError) throw e;
+        if (e instanceof BlockedError || e instanceof BudgetExhaustedError || e instanceof DeadlineError) throw e;
         stats.errors++;
         continue;
       }
@@ -79,7 +79,7 @@ export async function recheck(
       try {
         photoOk = isPhotoAlive(await fetcher.head(photo));
       } catch (e) {
-        if (e instanceof BlockedError || e instanceof BudgetExhaustedError) throw e;
+        if (e instanceof BlockedError || e instanceof BudgetExhaustedError || e instanceof DeadlineError) throw e;
         photoOk = null; // network hiccup: inconclusive, the page itself was alive
         stats.errors++;
       }
