@@ -50,7 +50,41 @@ export interface StrippedListing {
   photo_urls: string[];
   source: string;
   source_url: string;
+  /** Original publication date on the source portal (ISO, UTC); null when the source did not give one. */
+  published_at?: string | null;
 }
+
+// ─── listing filters (free play / streak) ────────────────────────────────────
+
+/** Publication window, measured from the listing's original publication date. */
+export type ListingPeriod = '24h' | '7d' | '30d' | 'all';
+/** Round order inside a session. Prices stay hidden even when sorting by price. */
+export type ListingSort = 'random' | 'newest' | 'price_asc' | 'price_desc';
+
+export interface ListingFilters {
+  period: ListingPeriod;
+  sort: ListingSort;
+  /** Cars only: canonical make as stored in `attributes.make` (e.g. "BMW"). */
+  make?: string | null;
+  /** Cars only: model as stored in `attributes.model`; requires `make`. */
+  model?: string | null;
+}
+export const DEFAULT_FILTERS: ListingFilters = { period: 'all', sort: 'random' };
+export const LISTING_PERIODS: ListingPeriod[] = ['24h', '7d', '30d', 'all'];
+export const LISTING_SORTS: ListingSort[] = ['random', 'newest', 'price_asc', 'price_desc'];
+
+/** `get_listing_status` row: current availability of a listing the player guessed on. */
+export type ListingStatus = 'active' | 'expired' | 'rejected' | 'unknown';
+export interface ListingAvailability {
+  id: number;
+  status: ListingStatus;
+  source_url: string;
+  /** When the scraper last verified the listing; null when unknown. */
+  checked_at: string | null;
+}
+
+export interface MakeCount { make: string; n: number }
+export interface ModelCount { model: string; n: number }
 
 /** One playable round: a stripped listing plus its signed single-use token. */
 export interface Round extends StrippedListing {

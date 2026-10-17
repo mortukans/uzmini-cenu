@@ -6,6 +6,7 @@
 import { supabase } from './supabase';
 import type {
   CategoryFilter, CategoryMeta, DailySet, DailySubmitResult, Duel, GuessResult, LeaderboardRow,
+  ListingAvailability, ListingFilters, ListingPeriod, MakeCount, ModelCount,
   Profile, Region, Room, RoomPlayer, Round, RoundToken, RpcErrorCode,
 } from './types';
 
@@ -29,6 +30,38 @@ async function call<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 
 export const getRounds = (category: CategoryFilter = 'all', region: Region | null = null, n = 10) =>
   call<Round[]>('get_rounds', { p_category: category, p_region: region, p_n: n });
+
+/**
+ * get_rounds with listing filters (migration 25). Same token semantics as
+ * get_rounds. `exclude` = listing ids already served in this session, so a
+ * sorted session (newest / price) continues deterministically on refill.
+ */
+export const getRoundsFiltered = (
+  category: CategoryFilter = 'all', region: Region | null = null, filters: ListingFilters, n = 10, exclude: number[] = [],
+) =>
+  call<Round[]>('get_rounds_filtered', {
+    p_category: category, p_region: region, p_n: n,
+    p_period: filters.period, p_make: filters.make ?? null, p_model: filters.model ?? null,
+    p_sort: filters.sort, p_exclude: exclude,
+  });
+
+/** How many currently active listings match the filters (no prices, no ids). */
+export const countListings = (category: CategoryFilter = 'all', region: Region | null = null, filters: ListingFilters) =>
+  call<number>('count_listings', {
+    p_category: category, p_region: region, p_period: filters.period,
+    p_make: filters.make ?? null, p_model: filters.model ?? null,
+  });
+
+/** Car makes with at least one active listing in the region/period, most common first. */
+export const listCarMakes = (region: Region | null = null, period: ListingPeriod = 'all') =>
+  call<MakeCount[]>('list_car_makes', { p_region: region, p_period: period });
+
+/** Models of one make with at least one active listing, most common first. */
+export const listCarModels = (make: string, region: Region | null = null, period: ListingPeriod = 'all') =>
+  call<ModelCount[]>('list_car_models', { p_make: make, p_region: region, p_period: period });
+
+/** Current availability of listings the player has guessed on (max 50 ids). Never returns prices. */
+export const getListingStatus = (ids: number[]) => call<ListingAvailability[]>('get_listing_status', { p_ids: ids });
 
 export const submitGuess = (token: string, guessEur: number, timeMs?: number) =>
   call<GuessResult>('submit_guess', { p_token: token, p_guess: guessEur, p_time_ms: timeMs ?? null });
