@@ -2,7 +2,7 @@
 /**
  * App Store release steps through the ASC API (no browser login needed).
  *   node tools/asc/release.mjs create 0.2.0          # new version (release after approval)
- *   node tools/asc/release.mjs notes 0.2.0 <file.md> # What's New from docs/notes/release-x.md (## English + ## Latvian)
+ *   node tools/asc/release.mjs notes 0.2.0 <file.md> # What's New from docs/notes/release-x.md (## English + ## Latvian [+ ## Russian])
  *   node tools/asc/release.mjs build 0.2.0 28        # attach build number 28 (must be VALID)
  *   node tools/asc/release.mjs submit 0.2.0          # create review submission + submit
  *   node tools/asc/release.mjs status
@@ -17,9 +17,16 @@ async function version(v) {
   return r.data[0] ?? null;
 }
 
-const section = (md, title) => {
-  const m = md.match(new RegExp(`## ${title}[^\n]*\n([\s\S]*?)(?=\n## |$)`));
-  return m ? m[1].trim() : '';
+/** "## English" / "## Latvian" / "## Russian" blocks → { English, Latvian, Russian }. */
+const sections = (md) => {
+  const out = {};
+  let cur = null;
+  for (const line of md.split(/\r?\n/)) {
+    const h = line.match(/^## (\w+)/);
+    if (h) { cur = h[1]; out[cur] = []; } else if (cur) out[cur].push(line);
+  }
+  for (const k in out) out[k] = out[k].join('\n').trim();
+  return out;
 };
 
 if (cmd === 'status') {
@@ -37,11 +44,12 @@ if (cmd === 'status') {
   console.log('created', r.data.id, r.data.attributes.versionString, r.data.attributes.appVersionState);
 } else if (cmd === 'notes') {
   const v = await version(ver); if (!v) throw new Error(`no version ${ver}`);
-  const md = readFileSync(arg, 'utf8');
-  const en = section(md, 'English'), lv = section(md, 'Latvian'), ru = section(md, 'Russian');
+  const { English: en = '', Latvian: lv = '', Russian: ru = '' } = sections(readFileSync(arg, 'utf8'));
+  if (!en || !lv) throw new Error('release notes need ## English and ## Latvian sections');
   const locs = await asc('GET', `/appStoreVersions/${v.id}/appStoreVersionLocalizations`);
   for (const l of locs.data) {
     const loc = l.attributes.locale;
+    // Only an en-US localization exists on the listing: English first, Latvian below it.
     const text = loc.startsWith('lv') ? lv : loc.startsWith('ru') ? ru : [en, '', '— — —', '', lv].join('\n');
     await asc('PATCH', `/appStoreVersionLocalizations/${l.id}`, { data: { type: 'appStoreVersionLocalizations', id: l.id, attributes: { whatsNew: text } } });
     console.log('whatsNew set for', loc, `(${text.length} chars)`);
