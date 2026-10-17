@@ -327,3 +327,17 @@ In order, cut from the top. Each line names what is removed and what stays.
 
 Never cut: daily challenge, share grid, account deletion, privacy labels,
 kill switch per source, attribution link on every reveal.
+
+## Status snapshot — 2026-10-17
+
+- **Live on the App Store since 2026-10-11** (0.1.0 build 27).
+- **0.2.0 — listing filters + session review** (built 2026-10-17): period (24 h / 7 d / 30 d /
+  all, on the SS "Datums" publication date kept in `listings.first_seen_at`), sort (random /
+  newest / price ↑↓, prices still hidden), cars make + model pickers with live counts, live
+  "N listings match" with a not-enough gate; filtered sessions via `get_rounds_filtered`
+  (deterministic refill through `p_exclude`), graceful end when a filtered pool runs dry;
+  end-of-session review list (thumb, title, asking vs guess, score) → review sheet with
+  attributes, availability from `get_listing_status`, and "Open listing" (original URL
+  preserved). Daily result rows open the same sheet. Migration 25.
+- Scraper: nightly run bounded by a 100-min wall clock (Oct 8); recheck backlog still growing
+  (budget favours new rows) — lower `--limit` to ~400 to let ~1000 rechecks run per night.

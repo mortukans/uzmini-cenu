@@ -109,6 +109,40 @@ describe('switching the auth user', () => {
   });
 });
 
+describe('prefs.filters (listing filters, device-global)', () => {
+  it('defaults to DEFAULT_FILTERS and merges partial / legacy stored prefs', async () => {
+    expect((await getPrefs()).filters).toEqual({ period: 'all', sort: 'random' });
+    mem.set('uc.prefs', JSON.stringify({ category: 'cars', region: 'latvia' })); // pre-filters build
+    expect(await getPrefs()).toMatchObject({ category: 'cars', region: 'latvia', filters: { period: 'all', sort: 'random' } });
+    mem.set('uc.prefs', JSON.stringify({ category: 'cars', filters: { period: '7d', make: 'BMW', sort: 'bogus' } }));
+    expect((await getPrefs()).filters).toEqual({ period: '7d', sort: 'random', make: 'BMW' });
+  });
+
+  it('setPrefs merges filters; a new make clears the model; leaving cars clears make/model', async () => {
+    await setPrefs({ category: 'cars' });
+    await setPrefs({ filters: { period: '30d', sort: 'newest', make: 'BMW', model: 'X5' } });
+    expect((await getPrefs()).filters).toEqual({ period: '30d', sort: 'newest', make: 'BMW', model: 'X5' });
+    await setPrefs({ filters: { period: '7d' } as never }); // partial patch keeps the rest
+    expect((await getPrefs()).filters).toEqual({ period: '7d', sort: 'newest', make: 'BMW', model: 'X5' });
+    await setPrefs({ filters: { make: 'Audi' } as never });
+    expect((await getPrefs()).filters).toEqual({ period: '7d', sort: 'newest', make: 'Audi' });
+    await setPrefs({ filters: { make: 'Audi', model: 'A6' } as never }); // same make → model kept/set
+    expect((await getPrefs()).filters).toEqual({ period: '7d', sort: 'newest', make: 'Audi', model: 'A6' });
+    await setPrefs({ filters: { make: null } as never });
+    expect((await getPrefs()).filters).toEqual({ period: '7d', sort: 'newest' });
+
+    await setPrefs({ filters: { make: 'BMW', model: 'X5' } as never });
+    await setPrefs({ category: 'flats' });
+    expect(await getPrefs()).toMatchObject({ category: 'flats', filters: { period: '7d', sort: 'newest' } });
+    expect((await getPrefs()).filters.make).toBeUndefined();
+  });
+
+  it('make/model stored for a non-cars category are ignored on read', async () => {
+    mem.set('uc.prefs', JSON.stringify({ category: 'flats', filters: { period: 'all', sort: 'random', make: 'BMW', model: 'X5' } }));
+    expect((await getPrefs()).filters).toEqual({ period: 'all', sort: 'random' });
+  });
+});
+
 describe('clearing', () => {
   it('clearUser removes only that user\'s keys', async () => {
     auth.signInAs('anon-1'); await setHintTokens(2); await setOnboarded(true);

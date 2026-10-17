@@ -3,24 +3,48 @@
  * Extracted from app/play/[sessionId].tsx so the session review can grow
  * without touching the round screen. Rendered by the play route when the
  * session phase is SUMMARY (mode !== daily).
+ *
+ * Session review: every listing the player guessed on is listed
+ * (`SessionReviewList`); tapping one opens `ListingReviewSheet` with the
+ * original ad link and its current availability (`get_listing_status`).
  */
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { formatEur } from '../../game/format';
 import { maxScore, totalScore, type Outcome } from '../../game/machine';
 import { sessionActions, useSession } from '../../game/session';
 import { setOnboarded } from '../../game/storage';
 import { rigaDay } from '../../game/time';
 import { currentLang } from '../../i18n';
 import { screenView, track } from '../../analytics';
-import { Button, Screen } from '../components';
-import { colors, gridColor, radius, spacing, type } from '../theme';
+import { Button, ListingReviewSheet, Screen, SessionReviewList, headerFor, useListingAvailability, type ReviewItem } from '../components';
+import { colors, spacing, type } from '../theme';
+
+/** `Outcome` → the generic review row/sheet item. Exported for tests. */
+export function reviewItemFor(o: Outcome, t: (k: string) => string): ReviewItem {
+  const h = headerFor(o.round, t);
+  return {
+    id: o.round.id,
+    category: o.round.category,
+    title: h.title,
+    subtitle: h.subtitle,
+    photoUrls: o.round.photo_urls ?? [],
+    attributes: o.round.attributes,
+    guess: o.guess,
+    price: o.price,
+    score: o.score,
+    cell: o.cell,
+    sourceUrl: o.sourceUrl,
+    source: o.round.source,
+    roundNo: o.roundNo,
+  };
+}
 
 export function SessionSummary({ isOnboarding, sessionId }: { isOnboarding: boolean; sessionId: string }) {
   const { t } = useTranslation();
+  const { t: tr } = useTranslation('review');
   const lang = currentLang();
   const s = useSession();
   const cfg = s.config;
@@ -31,6 +55,12 @@ export function SessionSummary({ isOnboarding, sessionId }: { isOnboarding: bool
     ? Math.round((s.outcomes.reduce((a, o) => a + (o.guess - o.price) / o.price, 0) / s.outcomes.length) * 100)
     : 0;
   const last = s.outcomes[s.outcomes.length - 1];
+
+  const items = useMemo(() => s.outcomes.map((o) => reviewItemFor(o, t)), [s.outcomes, t]);
+  const ids = useMemo(() => items.map((i) => i.id), [items]);
+  // Onboarding practice rounds are a local fixture set: never ask the server about them.
+  const availability = useListingAvailability(isOnboarding ? [] : ids);
+  const [selected, setSelected] = useState<ReviewItem | null>(null);
 
   useEffect(() => { screenView(isOnboarding ? 'onboarding_summary' : cfg?.mode === 'streak' ? 'streak_over' : 'session_summary'); }, [isOnboarding, cfg?.mode]);
 
@@ -47,6 +77,15 @@ export function SessionSummary({ isOnboarding, sessionId }: { isOnboarding: bool
   };
 
   const home = () => { sessionActions.reset(); router.replace('/(tabs)'); };
+
+  const review = (item: ReviewItem) => {
+    track('review_open_item', { listing_id: item.id, mode: cfg?.mode, status: availability[item.id]?.status ?? 'unknown' });
+    setSelected(item);
+  };
+
+  const sheet = (
+    <ListingReviewSheet item={selected} availability={selected ? availability[selected.id] : undefined} onClose={() => setSelected(null)} />
+  );
 
   if (isOnboarding) {
     return (
@@ -68,15 +107,18 @@ export function SessionSummary({ isOnboarding, sessionId }: { isOnboarding: bool
         <Text style={styles.summaryEyebrow}>{t('streak.over')}</Text>
         <Text style={styles.big}>{s.streak}</Text>
         <Text style={styles.summarySub}>{t('streak.best', { n: Math.max(s.streakBest, s.streak) })}</Text>
-        {last && (
-          <View style={styles.missCard}>
-            <Text style={styles.missLabel}>{last.round.location ?? t(`category.${last.round.category}`)}</Text>
-            <Text style={styles.missRow}>{t('round.asking')}: {formatEur(last.price, lang)}</Text>
-            <Text style={styles.missRow}>{t('reveal.your_guess')}: {formatEur(last.guess, lang)} ({Math.round(last.err * 100)} %)</Text>
-          </View>
+        {items.length > 0 && (
+          <SessionReviewList
+            items={items}
+            availability={availability}
+            onPress={review}
+            highlightId={last?.round.id}
+            highlightLabel={tr('final_miss')}
+          />
         )}
         <Button title={t('streak.try_again')} onPress={playAgain} style={{ marginTop: spacing.xl }} />
         <Button title={t('common.home')} variant='ghost' onPress={home} style={{ marginTop: spacing.sm }} />
+        {sheet}
       </Screen>
     );
   }
@@ -89,20 +131,11 @@ export function SessionSummary({ isOnboarding, sessionId }: { isOnboarding: bool
       {s.outcomes.length > 0 && (
         <Text style={styles.summarySub}>{bias > 0 ? t('summary.bias_over', { pct: Math.abs(bias) }) : bias < 0 ? t('summary.bias_under', { pct: Math.abs(bias) }) : t('summary.bias_none')}</Text>
       )}
-      <View style={styles.rows}>
-        {s.outcomes.map((o: Outcome) => (
-          <View key={o.roundNo} style={styles.row}>
-            <Text style={styles.rowNo}>{o.roundNo}</Text>
-            <Text style={styles.rowName} numberOfLines={1}>{o.round.location ?? t(`category.${o.round.category}`)}</Text>
-            <Text style={styles.rowNum}>{formatEur(o.guess, lang)}</Text>
-            <Text style={styles.rowNum}>{formatEur(o.price, lang)}</Text>
-            <Text style={[styles.rowScore, { color: gridColor(o.cell) }]}>{o.score}</Text>
-          </View>
-        ))}
-      </View>
+      {items.length > 0 && <SessionReviewList items={items} availability={availability} onPress={review} />}
       <Button title={t('summary.play_again')} onPress={playAgain} style={{ marginTop: spacing.xl }} />
       <Button title={t('common.home')} variant='ghost' onPress={home} style={{ marginTop: spacing.sm }} />
       <Text style={styles.dayFoot}>{rigaDay()}</Text>
+      {sheet}
     </Screen>
   );
 }
@@ -114,14 +147,5 @@ const styles = StyleSheet.create({
   big: { ...type.display, color: colors.text, textAlign: 'center', marginTop: spacing.sm, fontVariant: ['tabular-nums'] },
   grid: { fontSize: 28, textAlign: 'center', marginTop: spacing.sm },
   summarySub: { ...type.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs },
-  missCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.xl, gap: 4 },
-  missLabel: { ...type.h3, color: colors.text },
-  missRow: { ...type.body, color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  rows: { marginTop: spacing.xl, gap: 6 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
-  rowNo: { ...type.small, color: colors.textMuted, width: 18 },
-  rowName: { ...type.small, color: colors.text, flex: 1 },
-  rowNum: { ...type.small, color: colors.textMuted, fontVariant: ['tabular-nums'], width: 74, textAlign: 'right' },
-  rowScore: { ...type.small, fontWeight: '700', fontVariant: ['tabular-nums'], width: 44, textAlign: 'right' },
   dayFoot: { ...type.small, color: colors.border, textAlign: 'center', marginTop: spacing.xl },
 });

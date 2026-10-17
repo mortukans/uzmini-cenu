@@ -46,6 +46,33 @@
     "duel_sub": "Izaicini draugu",
     "room": "Istaba"
   },
+  "filters": {
+    "title": "Filtri",
+    "period": {
+      "24h": "24 h",
+      "7d": "7 d",
+      "30d": "30 d",
+      "all": "Visi"
+    },
+    "sort_label": "Secība",
+    "sort": {
+      "random": "Nejauši",
+      "newest": "Jaunākie",
+      "price_asc": "Cena ↑",
+      "price_desc": "Cena ↓"
+    },
+    "sort_note": "Cenas paliek paslēptas, kamēr mini.",
+    "make": "Marka",
+    "model": "Modelis",
+    "any_make": "Jebkura marka",
+    "any_model": "Jebkurš modelis",
+    "search": "Meklēt…",
+    "matches_one": "Atbilst {{count}} sludinājums",
+    "matches_zero": "Atbilst {{count}} sludinājumu",
+    "matches_other": "Atbilst {{count}} sludinājumi",
+    "not_enough": "Par maz sludinājumu šai izvēlei — paplašini filtrus.",
+    "reset": "Atiestatīt filtrus"
+  },
   "onboarding": {
     "tagline": "Uzmini, cik prasa par dzīvokli, auto vai dīvānu SS. Trīs kārtas, un tu saprati.",
     "step_photo": "Bīdi foto",
@@ -92,7 +119,9 @@
     "leave_title": "Pamest spēli?",
     "leave_body": "Progress tiks saglabāts.",
     "leave_confirm": "Pamest",
-    "photo_unavailable": "Foto nav pieejams"
+    "photo_unavailable": "Foto nav pieejams",
+    "empty_pool_filters": "Izvēlētajiem filtriem nav aktīvu sludinājumu",
+    "adjust_filters": "Mainīt filtrus"
   },
   "keypad": {
     "empty": "Ievadi cenu",

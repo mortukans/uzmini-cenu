@@ -28,10 +28,14 @@ export function playViewFor(s: Pick<SessionState, 'phase' | 'rounds' | 'lastOutc
   }
 }
 
-/** i18n key for the ERROR view (common/round namespaces). */
-export function errorKeyFor(s: Pick<SessionState, 'phase' | 'prevPhase' | 'error'>): string {
+/**
+ * i18n key for the ERROR view (common/round namespaces). `filtered` = a
+ * solo/streak session with non-default listing filters (or a car make): an
+ * empty pool is then explained by the filters, with an "Adjust filters" CTA.
+ */
+export function errorKeyFor(s: Pick<SessionState, 'phase' | 'prevPhase' | 'error'>, filtered = false): string {
   if (s.phase !== 'ERROR') return 'common.error';
-  if (s.error === 'empty_pool') return 'round.empty_pool';
+  if (s.error === 'empty_pool') return filtered ? 'round.empty_pool_filters' : 'round.empty_pool';
   if (s.error === 'network' || s.error === 'timeout') return 'common.offline';
   return s.prevPhase === 'GUESSING' ? 'round.submit_failed' : 'common.error';
 }

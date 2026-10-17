@@ -51,4 +51,11 @@ describe('playViewFor', () => {
     expect(e('bad_token', 'GUESSING')).toBe('round.submit_failed');
     expect(errorKeyFor({ ...initialState, phase: 'REVEALED' })).toBe('common.error');
   });
+
+  it('errorKeyFor blames the listing filters for an empty pool only when filters are active', () => {
+    const err = { ...initialState, phase: 'ERROR' as const, prevPhase: 'LOADING' as const };
+    expect(errorKeyFor({ ...err, error: 'empty_pool' }, true)).toBe('round.empty_pool_filters');
+    expect(errorKeyFor({ ...err, error: 'empty_pool' }, false)).toBe('round.empty_pool');
+    expect(errorKeyFor({ ...err, error: 'network' }, true)).toBe('common.offline');
+  });
 });

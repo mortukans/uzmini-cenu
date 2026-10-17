@@ -14,7 +14,7 @@ import type { Round } from '../api/types';
 
 (globalThis as { __DEV__?: boolean }).__DEV__ = false;
 
-const rpc = vi.hoisted(() => ({ getRounds: vi.fn(), getDaily: vi.fn(), submitGuess: vi.fn(), submitDaily: vi.fn() }));
+const rpc = vi.hoisted(() => ({ getRoundsFiltered: vi.fn(), getDaily: vi.fn(), submitGuess: vi.fn(), submitDaily: vi.fn() }));
 const image = vi.hoisted(() => ({ prefetch: vi.fn() }));
 const track = vi.hoisted(() => vi.fn());
 
@@ -74,7 +74,7 @@ const st = () => useSession.getState();
 /** Start a solo session as `uid`, wait until the first round is GUESSING. */
 async function startSolo(uid = 'anon-1') {
   auth.signInAs(uid);
-  rpc.getRounds.mockResolvedValueOnce(pool(10));
+  rpc.getRoundsFiltered.mockResolvedValueOnce(pool(10));
   await sessionActions.startSession({ mode: 'solo', category: 'all', sessionId: 'solo:all' });
   await flush(); await flush();
   expect(st().phase).toBe('GUESSING');
@@ -92,7 +92,7 @@ async function playCurrent(guess: number, price: number, score: number) {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  rpc.getRounds.mockReset(); rpc.getDaily.mockReset(); rpc.submitGuess.mockReset();
+  rpc.getRoundsFiltered.mockReset(); rpc.getDaily.mockReset(); rpc.submitGuess.mockReset();
   image.prefetch.mockReset().mockResolvedValue(true);
   track.mockReset();
   userState.hints = {}; userState.bests = {};
@@ -113,11 +113,11 @@ describe('auth user changes while a session is live', () => {
     expect(sessionActions.poolOwner()).toBe('anon-1');
 
     // Apple / Google link: signInWithIdToken → new auth.uid()
-    rpc.getRounds.mockResolvedValueOnce(pool(10, 100));
+    rpc.getRoundsFiltered.mockResolvedValueOnce(pool(10, 100));
     auth.signInAs('apple-user');
     await flush(); await flush();
 
-    expect(rpc.getRounds).toHaveBeenCalledTimes(2);
+    expect(rpc.getRoundsFiltered).toHaveBeenCalledTimes(2);
     expect(sessionActions.poolOwner()).toBe('apple-user');
     expect(st().phase).toBe('GUESSING');
     expect(st().rounds[0].id).toBe(100);
@@ -137,7 +137,7 @@ describe('auth user changes while a session is live', () => {
   it('while REVEALED: the revealed round stays on screen, the queue behind it is re-issued', async () => {
     await startSolo('anon-1');
     await playCurrent(72000, 78500, 516);
-    rpc.getRounds.mockResolvedValueOnce(pool(10, 100));
+    rpc.getRoundsFiltered.mockResolvedValueOnce(pool(10, 100));
     auth.signInAs('google-user');
     await flush(); await flush();
     expect(st().phase).toBe('REVEALED');
@@ -154,20 +154,20 @@ describe('auth user changes while a session is live', () => {
     await startSolo('anon-1');
     auth.setState({ session: { user: { id: 'anon-1' } } });
     await flush();
-    expect(rpc.getRounds).toHaveBeenCalledTimes(1);
+    expect(rpc.getRoundsFiltered).toHaveBeenCalledTimes(1);
   });
 
   it('a pool that was in flight for the previous user is dropped and fetched again', async () => {
     auth.signInAs('anon-1');
     let resolve!: (r: Round[]) => void;
-    rpc.getRounds.mockReturnValueOnce(new Promise<Round[]>((r) => { resolve = r; }));
+    rpc.getRoundsFiltered.mockReturnValueOnce(new Promise<Round[]>((r) => { resolve = r; }));
     await sessionActions.startSession({ mode: 'solo', category: 'all', sessionId: 'solo:all' });
     await flush();
     auth.signInAs('apple-user');
-    rpc.getRounds.mockResolvedValueOnce(pool(10, 100));
+    rpc.getRoundsFiltered.mockResolvedValueOnce(pool(10, 100));
     resolve(pool(10)); // stale: issued to anon-1
     await flush(); await flush(); await flush();
-    expect(rpc.getRounds).toHaveBeenCalledTimes(2);
+    expect(rpc.getRoundsFiltered).toHaveBeenCalledTimes(2);
     expect(st().rounds[0]?.id).toBe(100);
     expect(sessionActions.poolOwner()).toBe('apple-user');
   });
@@ -179,7 +179,7 @@ describe('auth user changes while a session is live', () => {
     expect(st().phase).toBe('GUESSING');
     auth.signInAs('apple-user');
     await flush(); await flush();
-    expect(rpc.getRounds).not.toHaveBeenCalled();
+    expect(rpc.getRoundsFiltered).not.toHaveBeenCalled();
     expect(st().phase).toBe('GUESSING');
     expect(st().rounds[0].id).toBe(ONBOARDING_SET[0].id);
     sessionActions.submit(80_000);
@@ -193,7 +193,7 @@ describe('auth user changes while a session is live', () => {
     userState.hints['anon-1'] = 2;
     userState.bests['anon-1'] = { all: 7 };
     auth.signInAs('anon-1');
-    rpc.getRounds.mockResolvedValueOnce(pool(10));
+    rpc.getRoundsFiltered.mockResolvedValueOnce(pool(10));
     await sessionActions.startSession({ mode: 'streak', category: 'all', sessionId: 'streak:all', streak: 0 });
     useSession.setState({ streakBest: 7 }); // the round screen seeds it from getStreakBests()
     await flush(); await flush();
@@ -201,7 +201,7 @@ describe('auth user changes while a session is live', () => {
     expect(st().streakBest).toBe(7);
 
     // restore a different account: its own (empty) local state, never anon-1's
-    rpc.getRounds.mockResolvedValueOnce(pool(10, 100));
+    rpc.getRoundsFiltered.mockResolvedValueOnce(pool(10, 100));
     auth.signInAs('apple-user');
     await flush(); await flush();
     expect(st().hintTokens).toBe(0);
@@ -211,7 +211,7 @@ describe('auth user changes while a session is live', () => {
     // and the values of a user with local state come back when switching to it
     userState.hints['google-user'] = 1;
     userState.bests['google-user'] = { all: 3 };
-    rpc.getRounds.mockResolvedValueOnce(pool(10, 200));
+    rpc.getRoundsFiltered.mockResolvedValueOnce(pool(10, 200));
     auth.signInAs('google-user');
     await flush(); await flush();
     expect(st().hintTokens).toBe(1);
@@ -224,7 +224,7 @@ describe('auth user changes while a session is live', () => {
     expect(await sessionActions.spendHintToken()).toBe(true);
     expect(userState.hints['anon-1']).toBe(1);
     expect(st().hintTokens).toBe(1);
-    rpc.getRounds.mockResolvedValueOnce(pool(10, 100));
+    rpc.getRoundsFiltered.mockResolvedValueOnce(pool(10, 100));
     auth.signInAs('apple-user');
     await flush(); await flush();
     expect(st().hintTokens).toBe(0);
@@ -259,7 +259,7 @@ describe('stale tokens on submit', () => {
   it('bad_token: the round is discarded, the pool re-issued and the next round reaches GUESSING', async () => {
     await startSolo('anon-1');
     rpc.submitGuess.mockRejectedValueOnce(new RpcError('bad_token'));
-    rpc.getRounds.mockResolvedValueOnce(pool(10, 100));
+    rpc.getRoundsFiltered.mockResolvedValueOnce(pool(10, 100));
     sessionActions.submit(50_000);
     await flush(); await flush(); await flush();
     expect(st().phase).toBe('GUESSING'); // not stuck in STAGED with a dead keypad
@@ -273,7 +273,7 @@ describe('stale tokens on submit', () => {
   it('token_expired with the re-fetch failing still leaves a playable round (the rest of the old queue)', async () => {
     await startSolo('anon-1');
     rpc.submitGuess.mockRejectedValueOnce(new RpcError('token_expired'));
-    rpc.getRounds.mockRejectedValueOnce(new TypeError('Network request failed'));
+    rpc.getRoundsFiltered.mockRejectedValueOnce(new TypeError('Network request failed'));
     sessionActions.submit(50_000);
     await flush(); await flush(); await flush();
     expect(st().phase).toBe('GUESSING');
@@ -285,12 +285,12 @@ describe('stale tokens on submit', () => {
     await sessionActions.startSession({ mode: 'solo', category: 'all', rounds: [round(1)], totalRounds: 3, sessionId: 'solo:all' });
     await flush(); await flush();
     expect(st().phase).toBe('GUESSING');
-    expect(rpc.getRounds).not.toHaveBeenCalled(); // no proactive top-up of a supplied pool
-    rpc.getRounds.mockResolvedValueOnce(pool(10, 100));
+    expect(rpc.getRoundsFiltered).not.toHaveBeenCalled(); // no proactive top-up of a supplied pool
+    rpc.getRoundsFiltered.mockResolvedValueOnce(pool(10, 100));
     await playCurrent(1, 1, 1000);
     sessionActions.next();
     await flush(); await flush(); await flush();
-    expect(rpc.getRounds).toHaveBeenCalledTimes(1);
+    expect(rpc.getRoundsFiltered).toHaveBeenCalledTimes(1);
     expect(st().phase).toBe('GUESSING');
     expect(st().rounds[0].id).toBe(100);
     expect(st().roundNo).toBe(2);
@@ -301,7 +301,7 @@ describe('LOADING watchdog', () => {
   it('surfaces ERROR (timeout) when the pool never arrives, and a late pool still recovers', async () => {
     auth.signInAs('anon-1');
     let resolve!: (r: Round[]) => void;
-    rpc.getRounds.mockReturnValueOnce(new Promise<Round[]>((r) => { resolve = r; }));
+    rpc.getRoundsFiltered.mockReturnValueOnce(new Promise<Round[]>((r) => { resolve = r; }));
     await sessionActions.startSession({ mode: 'solo', category: 'all', sessionId: 'solo:all' });
     await flush();
     expect(st().phase).toBe('LOADING');
@@ -325,7 +325,7 @@ describe('LOADING watchdog', () => {
     expect(st().phase).toBe('LOADING');
     vi.advanceTimersByTime(LOADING_TIMEOUT_MS);
     expect(st().phase).toBe('ERROR');
-    expect(rpc.getRounds).not.toHaveBeenCalled();
+    expect(rpc.getRoundsFiltered).not.toHaveBeenCalled();
   });
 
   it('recover() nudges every stuck state: STAGED → GUESSING, reveal without outcome → next round', async () => {

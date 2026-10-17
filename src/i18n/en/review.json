@@ -1,0 +1,15 @@
+{
+  "title": "Your listings",
+  "tap_hint": "Tap a listing to review it or open the original ad",
+  "still_listed": "Still listed",
+  "checked": "checked {{when}}",
+  "removed": "No longer available",
+  "unknown": "Availability unknown",
+  "open_removed": "Open listing (may be removed)",
+  "today": "today",
+  "yesterday": "yesterday",
+  "days_ago_one": "{{count}} day ago",
+  "days_ago_other": "{{count}} days ago",
+  "round_short": "Round {{n}}",
+  "final_miss": "Final round"
+}

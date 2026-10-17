@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Round } from '../api/types';
+import { DEFAULT_FILTERS, type Round } from '../api/types';
 import {
   encodeSessionId, initialState, isLastRound, parseSessionId, reduce, totalScore, type SessionConfig, type SessionState,
 } from './machine';
@@ -11,7 +11,7 @@ const round = (id: number): Round => ({
 });
 
 const solo: SessionConfig = {
-  sessionId: 'solo:flats:riga', mode: 'solo', category: 'flats', region: 'riga', totalRounds: 2,
+  sessionId: 'solo:flats:riga', mode: 'solo', category: 'flats', region: 'riga', filters: DEFAULT_FILTERS, totalRounds: 2,
   allowSkip: true, allowHints: true,
 };
 
@@ -167,6 +167,60 @@ describe('session reducer', () => {
     expect(s.rounds.map((r) => r.id)).toEqual([1, 2, 3]);
   });
 
+  describe('dry pool mid-session (filtered / sorted solo & streak)', () => {
+    it('solo: an empty refill after at least one outcome ends on SUMMARY instead of ERROR', () => {
+      let s = reduce(initialState, { type: 'START', config: { ...solo, totalRounds: 10 }, rounds: [round(1)] });
+      s = playRound(s, 72000, 78500, 516);
+      s = reduce(s, { type: 'NEXT' });
+      expect(s.phase).toBe('LOADING'); // queue exhausted → the store refills
+      s = reduce(s, { type: 'ROUNDS_LOADED', rounds: [] });
+      expect(s.phase).toBe('SUMMARY');
+      expect(s.error).toBeNull();
+      expect(s.outcomes).toHaveLength(1);
+      expect(totalScore(s)).toBe(516);
+    });
+
+    it('a refill that only re-serves already-seen ids counts as dry too', () => {
+      let s = reduce(initialState, { type: 'START', config: { ...solo, totalRounds: 10 }, rounds: [round(1)] });
+      s = playRound(s, 72000, 78500, 516);
+      s = reduce(s, { type: 'NEXT' });
+      s = reduce(s, { type: 'ROUNDS_LOADED', rounds: [round(1)] });
+      expect(s.phase).toBe('SUMMARY');
+    });
+
+    it('streak: ends on SUMMARY as well, keeping the streak count', () => {
+      let s = reduce(initialState, { type: 'START', config: { ...solo, mode: 'streak', totalRounds: null }, rounds: [round(1)] });
+      s = playRound(s, 95000, 100000, 700);
+      s = reduce(s, { type: 'NEXT' });
+      s = reduce(s, { type: 'ROUNDS_LOADED', rounds: [] });
+      expect(s.phase).toBe('SUMMARY');
+      expect(s.streak).toBe(1);
+    });
+
+    it('with nothing played yet an empty pool is still ERROR empty_pool (first load, also after a watchdog timeout)', () => {
+      let s = reduce(initialState, { type: 'START', config: solo });
+      expect(reduce(s, { type: 'ROUNDS_LOADED', rounds: [] }).error).toBe('empty_pool');
+      s = reduce(s, { type: 'LOAD_FAILED', error: 'timeout' });
+      s = reduce(s, { type: 'ROUNDS_LOADED', rounds: [] });
+      expect(s.phase).toBe('ERROR');
+      expect(s.error).toBe('empty_pool');
+    });
+
+    it('daily/duel/room never end themselves on an empty injectRounds', () => {
+      const duel: SessionConfig = { ...solo, mode: 'duel', totalRounds: 5, waitForOthers: true, allowSkip: false, allowHints: false };
+      let s = reduce(initialState, { type: 'START', config: duel, rounds: [round(1)] });
+      s = reduce(s, { type: 'PHOTO_READY' });
+      s = reduce(s, { type: 'SUBMIT', guess: 1000, timeMs: 1 });
+      s = reduce(s, { type: 'EXTERNAL_REVEAL', price: 1000, score: 1000 });
+      s = reduce(s, { type: 'REVEAL_DONE' });
+      s = reduce(s, { type: 'NEXT' });
+      expect(s.phase).toBe('LOADING');
+      s = reduce(s, { type: 'ROUNDS_LOADED', rounds: [] });
+      expect(s.phase).toBe('ERROR');
+      expect(s.error).toBe('empty_pool');
+    });
+  });
+
   describe('re-issued tokens (auth user changed / bad_token)', () => {
     const fresh = [round(11), round(12), round(13)];
 
@@ -254,14 +308,82 @@ describe('session reducer', () => {
 });
 
 describe('sessionId codec', () => {
-  it('round-trips solo/streak/daily and passes through duel/room ids', () => {
+  const none = DEFAULT_FILTERS;
+  const b64url = (s: string) => Buffer.from(s, 'utf8').toString('base64url');
+
+  it('round-trips solo/streak/daily and passes through duel/room ids (legacy 3-segment ids)', () => {
     expect(encodeSessionId('solo', 'flats', 'riga')).toBe('solo:flats:riga');
     expect(encodeSessionId('streak', 'all')).toBe('streak:all');
     expect(encodeSessionId('daily')).toBe('daily');
-    expect(parseSessionId('solo:flats:riga')).toEqual({ mode: 'solo', category: 'flats', region: 'riga', contextId: null });
-    expect(parseSessionId('streak:all')).toEqual({ mode: 'streak', category: 'all', region: null, contextId: null });
+    expect(parseSessionId('solo:flats:riga')).toEqual({ mode: 'solo', category: 'flats', region: 'riga', contextId: null, filters: none });
+    expect(parseSessionId('streak:all')).toEqual({ mode: 'streak', category: 'all', region: null, contextId: null, filters: none });
     expect(parseSessionId('daily').mode).toBe('daily');
-    expect(parseSessionId('duel:abc-123')).toEqual({ mode: 'duel', category: 'all', region: null, contextId: 'abc-123' });
+    expect(parseSessionId('daily').filters).toEqual(none);
+    expect(parseSessionId('duel:abc-123')).toEqual({ mode: 'duel', category: 'all', region: null, contextId: 'abc-123', filters: none });
     expect(parseSessionId('room:KTRP').contextId).toBe('KTRP');
+    expect(parseSessionId('onboarding').filters).toEqual(none);
+  });
+
+  it('default filters add no 4th segment; explicit DEFAULT_FILTERS is the same as none', () => {
+    expect(encodeSessionId('solo', 'flats', 'riga', none)).toBe('solo:flats:riga');
+    expect(encodeSessionId('solo', 'flats', 'riga', { period: 'all', sort: 'random', make: null, model: null })).toBe('solo:flats:riga');
+    expect(encodeSessionId('daily', 'all', null, { period: '7d', sort: 'newest' })).toBe('daily');
+  });
+
+  it('non-default filters travel as a base64url 4th segment and round-trip', () => {
+    const f = { period: '7d', sort: 'price_desc', make: 'BMW', model: 'X5' } as const;
+    const id = encodeSessionId('solo', 'cars', 'riga', f);
+    const [mode, cat, reg, seg, extra] = id.split(':');
+    expect([mode, cat, reg]).toEqual(['solo', 'cars', 'riga']);
+    expect(seg).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(seg).toBe(b64url(JSON.stringify(f))); // interoperable with the standard alphabet, no padding
+    expect(extra).toBeUndefined();
+    expect(parseSessionId(id)).toEqual({ mode: 'solo', category: 'cars', region: 'riga', contextId: null, filters: f });
+  });
+
+  it('keeps an empty region slot so the filters segment is unambiguous', () => {
+    const id = encodeSessionId('streak', 'all', null, { period: 'all', sort: 'newest' });
+    expect(id.startsWith('streak:all::')).toBe(true);
+    expect(parseSessionId(id)).toEqual({ mode: 'streak', category: 'all', region: null, contextId: null, filters: { period: 'all', sort: 'newest' } });
+  });
+
+  it('round-trips makes with spaces, hyphens and non-ASCII', () => {
+    for (const make of ['Mercedes-Benz', 'Škoda', 'Land Rover', 'Citroën', 'ВАЗ', 'Alfa Romeo']) {
+      const id = encodeSessionId('solo', 'cars', 'latvia', { period: '30d', sort: 'random', make, model: 'Octavia Combi 1.9 TDI' });
+      expect(id).not.toMatch(/[^A-Za-z0-9_:-]/); // URL-safe path segment
+      const p = parseSessionId(id);
+      expect(p.filters.make).toBe(make);
+      expect(p.filters.model).toBe('Octavia Combi 1.9 TDI');
+      expect(p.filters.period).toBe('30d');
+    }
+  });
+
+  it('a model without a make, or make/model on a non-cars category, is dropped on parse', () => {
+    const noMake = encodeSessionId('solo', 'cars', 'riga', { period: '24h', sort: 'random', model: 'X5' });
+    expect(parseSessionId(noMake).filters).toEqual({ period: '24h', sort: 'random' });
+    const flats = encodeSessionId('solo', 'flats', 'riga', { period: 'all', sort: 'newest', make: 'BMW' });
+    expect(parseSessionId(flats).filters).toEqual({ period: 'all', sort: 'newest' });
+  });
+
+  it('garbage or unknown values in the 4th segment fall back to DEFAULT_FILTERS / defaults', () => {
+    expect(parseSessionId('solo:cars:riga:%%%not-base64').filters).toEqual(none);
+    expect(parseSessionId('solo:cars:riga:' + b64url('[1,2]')).filters).toEqual(none);
+    expect(parseSessionId('solo:cars:riga:' + b64url('{"period":"1y","sort":"cheapest","make":"BMW"}')).filters)
+      .toEqual({ period: 'all', sort: 'random', make: 'BMW' });
+    // legacy ids keep category/region even if a bogus 4th segment is appended
+    expect(parseSessionId('solo:cars:riga:zzz')).toMatchObject({ mode: 'solo', category: 'cars', region: 'riga' });
+  });
+});
+
+describe('maxScore when a filtered pool runs dry', () => {
+  it('uses the rounds actually played once the session ended early on SUMMARY', async () => {
+    const { initialState, maxScore } = await import('./machine');
+    const base = initialState;
+    const cfg = { sessionId: 'solo:cars', mode: 'solo', category: 'cars', region: null, filters: { period: 'all', sort: 'random' }, totalRounds: 10, allowSkip: true, allowHints: true } as any;
+    const outcome = { roundNo: 1, guess: 1, price: 1, score: 1000, rawScore: 1000, err: 0, cell: '🟩', hints: [], timeMs: 0, sourceUrl: '', round: {} } as any;
+    expect(maxScore({ ...base, config: cfg, phase: 'GUESSING', outcomes: [outcome, outcome] })).toBe(10_000);
+    expect(maxScore({ ...base, config: cfg, phase: 'SUMMARY', outcomes: [outcome, outcome, outcome] })).toBe(3_000);
+    expect(maxScore({ ...base, config: cfg, phase: 'SUMMARY', outcomes: [] })).toBe(10_000);
+    expect(maxScore({ ...base, config: { ...cfg, totalRounds: null }, phase: 'SUMMARY', outcomes: [outcome] })).toBeNull();
   });
 });

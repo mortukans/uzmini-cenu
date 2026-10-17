@@ -1,5 +1,5 @@
 /** Daily result + share (docs/11 §2.8, share text per docs/02 §3.3). */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -8,14 +8,33 @@ import { useQuery } from '@tanstack/react-query';
 import { myRank } from '../../src/api/rpc';
 import { useAuth } from '../../src/auth/store';
 import { env, isConfigured } from '../../src/env';
-import { formatEur } from '../../src/game/format';
 import { useSession } from '../../src/game/session';
 import { getDailyLocalResult, getDailyStreak, type StoredOutcome } from '../../src/game/storage';
 import { currentLang } from '../../src/i18n';
 import { screenView, track } from '../../src/analytics';
 import { haptic } from '../../src/ui/haptics';
-import { Button, CountdownText, Screen } from '../../src/ui/components';
-import { colors, gridColor, radius, spacing, type } from '../../src/ui/theme';
+import { Button, CountdownText, ListingReviewSheet, Screen, SessionReviewList, useListingAvailability, type ReviewItem } from '../../src/ui/components';
+import { colors, spacing, type } from '../../src/ui/theme';
+
+/**
+ * `StoredOutcome` → review item. The local daily record has no category or
+ * attributes (docs/05 strips them before storing), so the title falls back
+ * from the title hint to the location to the round number.
+ */
+export function reviewItemForStored(o: StoredOutcome, t: (k: string, opts?: Record<string, unknown>) => string): ReviewItem {
+  return {
+    id: o.listing_id,
+    title: o.title_hint ?? o.location ?? t('round.round_n', { n: o.round_no }),
+    subtitle: o.title_hint ? o.location : null,
+    photoUrls: o.thumb ? [o.thumb] : [],
+    guess: o.guess,
+    price: o.price,
+    score: o.score,
+    cell: o.cell,
+    sourceUrl: o.source_url,
+    roundNo: o.round_no,
+  };
+}
 
 /** Exact three-line share text (docs/02 §3.3). */
 export function buildShareText(number: number, total: number, grid: string, lang: 'lv' | 'ru' | 'en', streakDays: number, host = env.UNIVERSAL_LINK_HOST): string {
@@ -47,6 +66,15 @@ export default function DailyResult() {
   const grid = session.dailySubmitted?.grid ?? local?.grid ?? '';
   const outcomes: StoredOutcome[] = local?.outcomes ?? [];
   const synced = session.dailySubmitted?.synced ?? local?.synced ?? false;
+
+  const items = useMemo(() => outcomes.map((o) => reviewItemForStored(o, t)), [outcomes, t]);
+  const ids = useMemo(() => items.map((i) => i.id), [items]);
+  const availability = useListingAvailability(ids);
+  const [selected, setSelected] = useState<ReviewItem | null>(null);
+  const review = (item: ReviewItem) => {
+    track('review_open_item', { listing_id: item.id, mode: 'daily', status: availability[item.id]?.status ?? 'unknown' });
+    setSelected(item);
+  };
 
   const globalRank = useQuery({ queryKey: ['myRank', 'global', 'day'], queryFn: () => myRank('global', 'day'), enabled: isConfigured && hasUsername && synced });
   const friendsRank = useQuery({ queryKey: ['myRank', 'friends', 'day'], queryFn: () => myRank('friends', 'day'), enabled: isConfigured && hasUsername && synced });
@@ -80,16 +108,7 @@ export default function DailyResult() {
       <Text style={styles.grid}>{grid}</Text>
       {streakDays >= 2 && <Text style={styles.flame}>🔥 {t('daily.streak_days', { count: streakDays })}</Text>}
 
-      <View style={styles.rows}>
-        {outcomes.map((o) => (
-          <View key={o.round_no} style={styles.row}>
-            <Text style={styles.rowNo}>{o.round_no}</Text>
-            <Text style={styles.rowName} numberOfLines={1}>{o.location ?? o.title_hint ?? '—'}</Text>
-            <Text style={styles.rowNum}>{formatEur(o.price, lang)}</Text>
-            <Text style={[styles.rowScore, { color: gridColor(o.cell) }]}>{o.score}</Text>
-          </View>
-        ))}
-      </View>
+      {items.length > 0 && <SessionReviewList items={items} availability={availability} onPress={review} />}
 
       <View style={styles.ranks}>
         {!hasUsername ? (
@@ -110,6 +129,7 @@ export default function DailyResult() {
       <Button title={t('daily.share')} onPress={() => { void share(); }} style={{ marginTop: spacing.sm }} />
       <Button title={t('leaderboard.title')} variant="ghost" onPress={() => router.push('/leaderboard')} style={{ marginTop: spacing.sm }} />
       <CountdownText template={t('home.next_in', { time: '{time}' })} style={{ textAlign: 'center', marginTop: spacing.md }} />
+      <ListingReviewSheet item={selected} availability={selected ? availability[selected.id] : undefined} onClose={() => setSelected(null)} />
     </Screen>
   );
 }
@@ -121,12 +141,6 @@ const styles = StyleSheet.create({
   total: { ...type.display, color: colors.text, textAlign: 'center', fontVariant: ['tabular-nums'] },
   grid: { fontSize: 32, textAlign: 'center', marginTop: spacing.xs },
   flame: { ...type.body, color: colors.accent, textAlign: 'center', marginTop: spacing.sm },
-  rows: { marginTop: spacing.xl, gap: 6 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
-  rowNo: { ...type.small, color: colors.textMuted, width: 18 },
-  rowName: { ...type.body, color: colors.text, flex: 1, fontSize: 15 },
-  rowNum: { ...type.small, color: colors.textMuted, fontVariant: ['tabular-nums'], width: 84, textAlign: 'right' },
-  rowScore: { ...type.body, fontWeight: '700', fontVariant: ['tabular-nums'], width: 48, textAlign: 'right' },
   ranks: { marginTop: spacing.lg, gap: 4, alignItems: 'center' },
   muted: { ...type.body, color: colors.textMuted },
   link: { ...type.body, color: colors.accent, fontWeight: '600' },

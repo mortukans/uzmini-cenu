@@ -10,16 +10,17 @@
  */
 import { create } from 'zustand';
 import { Image } from 'expo-image';
-import type { CategoryFilter, GuessResult, Mode, Region, Round, RoundResults } from '../api/types';
-import { getDaily, getRounds, RpcError, submitDaily, submitGuess } from '../api/rpc';
+import type { CategoryFilter, GuessResult, ListingFilters, Mode, Region, Round, RoundResults } from '../api/types';
+import { getDaily, getRoundsFiltered, RpcError, submitDaily, submitGuess } from '../api/rpc';
 import { useAuth } from '../auth/store';
 import { isConfigured } from '../env';
 import { score as localScore, gridCell } from './scoring';
 import { track } from '../analytics';
 import {
-  DAILY_ROUNDS, LOADING_TIMEOUT_MS, SOLO_ROUNDS, STAGED_TIMEOUT_MS, currentRound, initialState, reduce, totalScore,
+  DAILY_ROUNDS, LOADING_TIMEOUT_MS, SOLO_ROUNDS, STAGED_TIMEOUT_MS, currentRound, initialState, parseSessionId, reduce, totalScore,
   type Action, type Outcome, type Phase, type SessionConfig, type SessionState,
 } from './machine';
+import { normalizeFilters } from './filters';
 import { HINT_TOKEN_EVERY_HITS, MAX_HINT_TOKENS, hintsAllowed, type HintType } from './hints';
 import {
   bumpDailyStreak, getDailyProgress, getHintTokens, getStreakBests, recordStreakBest, setDailyLocalResult, setDailyProgress,
@@ -35,6 +36,12 @@ export interface StartSessionOptions {
   mode: Mode;
   category?: CategoryFilter;
   region?: Region | null;
+  /**
+   * Listing filters (solo/streak). Defaults to the filters encoded in
+   * `sessionId`, so a play-again with the same id keeps them automatically.
+   * make/model are stripped for non-car categories.
+   */
+  filters?: ListingFilters;
   sessionId?: string;
   /** Pre-supplied rounds (duel/room snapshot with tokens; onboarding). */
   rounds?: Round[];
@@ -220,7 +227,9 @@ async function ensurePool() {
   const gen = generation;
   const uid = currentUid();
   try {
-    const rounds = isConfigured ? await getRounds(cfg.category, cfg.region, POOL_SIZE) : [];
+    // Exclude every id already served: a sorted (newest / price) session then
+    // continues deterministically where the previous page ended.
+    const rounds = isConfigured ? await getRoundsFiltered(cfg.category, cfg.region, cfg.filters, POOL_SIZE, s.servedIds) : [];
     if (gen !== generation) return;
     if (uid !== currentUid()) {
       // The auth user changed while the request was in flight: these tokens
@@ -276,7 +285,12 @@ async function replacePool(reason: 'auth_change' | 'bad_token' | 'token_expired'
       roundsUid = uid;
       dispatch({ type: 'ROUNDS_REPLACED', rounds: swapped.length ? swapped : set.rounds });
     } else {
-      const rounds = await getRounds(cfg.category, cfg.region, POOL_SIZE);
+      // Re-issue the unplayed rounds: only the ones already *played* (and the
+      // one pending on screen) are excluded, so a sorted session gets the same
+      // listings back with fresh tokens.
+      const pendingId = s.phase === 'LOADING' || s.phase === 'STAGED' || s.phase === 'GUESSING' || s.phase === 'ERROR' ? undefined : currentRound(s)?.id;
+      const exclude = [...s.outcomes.map((o) => o.round.id), ...(pendingId != null ? [pendingId] : [])];
+      const rounds = await getRoundsFiltered(cfg.category, cfg.region, cfg.filters, POOL_SIZE, exclude);
       if (gen !== generation) return;
       roundsUid = uid;
       dispatch({ type: 'ROUNDS_REPLACED', rounds });
@@ -465,13 +479,17 @@ async function startSession(o: StartSessionOptions) {
   const category = o.category ?? 'all';
   const region = o.region ?? null;
   const sessionId = o.sessionId ?? (o.mode === 'daily' ? 'daily' : [o.mode, category, region ?? ''].filter(Boolean).join(':'));
+  // Filters only apply to solo/streak; non-car categories never send make/model.
+  const filters = o.mode === 'solo' || o.mode === 'streak'
+    ? normalizeFilters(o.filters ?? parseSessionId(sessionId).filters, category)
+    : normalizeFilters(null);
   const totalRounds = o.totalRounds !== undefined ? o.totalRounds
     : o.mode === 'streak' ? null
     : o.mode === 'daily' ? DAILY_ROUNDS
     : o.mode === 'solo' ? SOLO_ROUNDS
     : o.rounds?.length ?? 5;
   const config: SessionConfig = {
-    sessionId, mode: o.mode, category, region, totalRounds, timerSec: o.timer, waitForOthers: o.waitForOthers,
+    sessionId, mode: o.mode, category, region, filters, totalRounds, timerSec: o.timer, waitForOthers: o.waitForOthers,
     allowSkip: o.mode === 'solo' && !o.localScoring, allowHints: hintsAllowed(o.mode) && !o.localScoring, contextId: o.contextId,
   };
   const hintTokens = await getHintTokens().catch(() => 0);

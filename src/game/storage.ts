@@ -12,8 +12,9 @@
  *    app/(tabs)/index.tsx, app/(tabs)/daily.tsx and src/game/session.ts.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { CategoryFilter, Region } from '../api/types';
+import { DEFAULT_FILTERS, type CategoryFilter, type ListingFilters, type Region } from '../api/types';
 import { useAuth } from '../auth/store';
+import { normalizeFilters } from './filters';
 import type { HintType } from './hints';
 
 /** Device-global keys. */
@@ -67,10 +68,30 @@ export interface Prefs {
   region: Region;
   haptics: boolean;
   lang?: 'lv' | 'ru' | 'en';
+  /** Listing filters for free play / streak (device-global, like category/region). */
+  filters: ListingFilters;
 }
-export const DEFAULT_PREFS: Prefs = { category: 'flats', region: 'riga', haptics: true };
-export const getPrefs = async () => ({ ...DEFAULT_PREFS, ...(await getJson<Partial<Prefs>>(DEVICE_KEYS.prefs, {})) });
-export const setPrefs = async (patch: Partial<Prefs>) => setJson(DEVICE_KEYS.prefs, { ...(await getPrefs()), ...patch });
+export const DEFAULT_PREFS: Prefs = { category: 'flats', region: 'riga', haptics: true, filters: DEFAULT_FILTERS };
+export async function getPrefs(): Promise<Prefs> {
+  const stored = await getJson<Partial<Prefs>>(DEVICE_KEYS.prefs, {});
+  const merged = { ...DEFAULT_PREFS, ...stored };
+  return { ...merged, filters: normalizeFilters(stored.filters, merged.category) };
+}
+/**
+ * Merge a patch into the stored prefs. Make/model only make sense for cars, so
+ * switching the category away from 'cars' clears them; changing the make
+ * clears the model (models belong to a make).
+ */
+export async function setPrefs(patch: Partial<Prefs>): Promise<void> {
+  const cur = await getPrefs();
+  const category = patch.category ?? cur.category;
+  let filters: ListingFilters = { ...cur.filters, ...(patch.filters ?? {}) };
+  if (patch.filters && 'make' in patch.filters && (patch.filters.make ?? null) !== (cur.filters.make ?? null) && !('model' in patch.filters)) {
+    delete filters.model;
+  }
+  filters = normalizeFilters(filters, category);
+  await setJson(DEVICE_KEYS.prefs, { ...cur, ...patch, category, filters });
+}
 
 // ─── streak (per user) ───────────────────────────────────────────────────────
 export type StreakBests = Partial<Record<CategoryFilter, number>>;

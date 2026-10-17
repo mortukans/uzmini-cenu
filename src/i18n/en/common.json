@@ -46,6 +46,32 @@
     "duel_sub": "Challenge a friend",
     "room": "Room"
   },
+  "filters": {
+    "title": "Filters",
+    "period": {
+      "24h": "24 h",
+      "7d": "7 d",
+      "30d": "30 d",
+      "all": "All"
+    },
+    "sort_label": "Order",
+    "sort": {
+      "random": "Random",
+      "newest": "Newest",
+      "price_asc": "Price ↑",
+      "price_desc": "Price ↓"
+    },
+    "sort_note": "Prices stay hidden while you guess.",
+    "make": "Make",
+    "model": "Model",
+    "any_make": "Any make",
+    "any_model": "Any model",
+    "search": "Search…",
+    "matches_one": "{{count}} listing matches",
+    "matches_other": "{{count}} listings match",
+    "not_enough": "Not enough listings for this selection — widen the filters.",
+    "reset": "Reset filters"
+  },
   "onboarding": {
     "tagline": "Guess what people ask for a flat, a car or a sofa on SS. Three rounds and you get it.",
     "step_photo": "Swipe the photos",
@@ -91,7 +117,9 @@
     "leave_title": "Leave the game?",
     "leave_body": "Your progress will be saved.",
     "leave_confirm": "Leave",
-    "photo_unavailable": "Photo unavailable"
+    "photo_unavailable": "Photo unavailable",
+    "empty_pool_filters": "No active listings match the chosen filters",
+    "adjust_filters": "Adjust filters"
   },
   "keypad": {
     "empty": "Enter a price",

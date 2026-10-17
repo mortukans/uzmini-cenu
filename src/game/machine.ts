@@ -3,9 +3,10 @@
  * No I/O here: src/game/session.ts wraps it with fetching, prefetch, RPC calls
  * and timers. Every mode (solo, streak, daily, duel, room) drives this reducer.
  */
-import type { CategoryFilter, Mode, Region, Round } from '../api/types';
+import { DEFAULT_FILTERS, type CategoryFilter, type ListingFilters, type Mode, type Region, type Round } from '../api/types';
 import { gridCell, relativeError, streakSurvives, type GridCell } from './scoring';
 import { applyHintPenalty, type HintType } from './hints';
+import { decodeFiltersSegment, encodeFiltersSegment } from './filters';
 
 export type Phase =
   | 'LOADING' | 'STAGED' | 'GUESSING' | 'SUBMITTING' | 'WAITING_OTHERS'
@@ -25,6 +26,8 @@ export interface SessionConfig {
   mode: Mode;
   category: CategoryFilter;
   region: Region | null;
+  /** Listing filters (solo/streak); DEFAULT_FILTERS for every other mode. */
+  filters: ListingFilters;
   /** Number of scored rounds in the session; null = until the streak breaks. */
   totalRounds: number | null;
   /** Seconds per round (duel/room); undefined = no timer. */
@@ -132,7 +135,17 @@ export type Action =
 
 export const currentRound = (s: SessionState): Round | undefined => s.rounds[0];
 export const totalScore = (s: SessionState): number => s.outcomes.reduce((a, o) => a + o.score, 0);
-export const maxScore = (s: SessionState): number | null => (s.config?.totalRounds ? s.config.totalRounds * 1000 : null);
+/**
+ * Best possible total. Normally totalRounds × 1000; when a filtered pool ran
+ * dry and the session ended early (SUMMARY with fewer outcomes than planned)
+ * the maximum is what could still have been scored in the rounds played.
+ */
+export const maxScore = (s: SessionState): number | null => {
+  const planned = s.config?.totalRounds;
+  if (!planned) return null;
+  const played = s.outcomes.length;
+  return (s.phase === 'SUMMARY' && played > 0 && played < planned ? played : planned) * 1000;
+};
 export const isLastRound = (s: SessionState): boolean =>
   s.config?.totalRounds != null && s.roundNo >= s.config.totalRounds;
 
@@ -178,7 +191,13 @@ export function reduce(s: SessionState, a: Action): SessionState {
       const next = { ...s, rounds, servedIds: [...s.servedIds, ...fresh.map((r) => r.id)].slice(-200), error: null };
       // A pool that arrives late (after the LOADING watchdog fired) still recovers the session.
       if (s.phase === 'LOADING' || (s.phase === 'ERROR' && s.prevPhase === 'LOADING')) {
-        if (rounds.length === 0) return { ...next, phase: 'ERROR', prevPhase: 'LOADING', error: 'empty_pool' };
+        if (rounds.length === 0) {
+          // Filtered / sorted solo & streak pools can run dry mid-session: end
+          // gracefully on the summary once something was played, never hang.
+          const own = s.config?.mode === 'solo' || s.config?.mode === 'streak';
+          if (own && s.outcomes.length > 0) return { ...next, phase: 'SUMMARY', prevPhase: null, lastOutcome: null };
+          return { ...next, phase: 'ERROR', prevPhase: 'LOADING', error: 'empty_pool' };
+        }
         return stage({ ...next, prevPhase: null });
       }
       return next;
@@ -300,9 +319,18 @@ export function reduce(s: SessionState, a: Action): SessionState {
   }
 }
 
-/** Build the sessionId string used by `play/[sessionId]`. */
-export function encodeSessionId(mode: Mode, category: CategoryFilter = 'all', region: Region | null = null): string {
+/**
+ * Build the sessionId string used by `play/[sessionId]`:
+ *   `solo:flats:riga`, `streak:all`, `daily`, and — only when the filters differ
+ *   from DEFAULT_FILTERS — a 4th segment with base64url(JSON of the non-default
+ *   fields): `solo:cars:riga:eyJwZXJpb2QiOiI3ZCIsIm1ha2UiOiJCTVcifQ`. The region
+ *   slot is then kept (empty when null) so the 4th segment is unambiguous:
+ *   `streak:all::eyJzb3J0IjoibmV3ZXN0In0`.
+ */
+export function encodeSessionId(mode: Mode, category: CategoryFilter = 'all', region: Region | null = null, filters?: ListingFilters): string {
   if (mode === 'daily') return 'daily';
+  const seg = (mode === 'solo' || mode === 'streak') ? encodeFiltersSegment(filters) : '';
+  if (seg) return [mode, category, region ?? '', seg].join(':');
   return [mode, category, region ?? ''].filter(Boolean).join(':');
 }
 
@@ -311,16 +339,22 @@ export interface ParsedSessionId {
   category: CategoryFilter;
   region: Region | null;
   contextId: string | null;
+  /** DEFAULT_FILTERS when the id has no (or an invalid) filters segment. */
+  filters: ListingFilters;
 }
 
 export function parseSessionId(id: string): ParsedSessionId {
-  const [head, p1, p2] = id.split(':');
+  const [head, p1, p2, p3] = id.split(':');
   const categories: CategoryFilter[] = ['flats', 'houses', 'cars', 'random', 'land', 'all'];
   const regions: Region[] = ['riga', 'riga_region', 'latvia'];
-  if (head === 'daily') return { mode: 'daily', category: 'all', region: null, contextId: null };
-  if (head === 'duel' || head === 'room') return { mode: head, category: 'all', region: null, contextId: p1 ?? null };
+  const none = { ...DEFAULT_FILTERS };
+  if (head === 'daily') return { mode: 'daily', category: 'all', region: null, contextId: null, filters: none };
+  if (head === 'duel' || head === 'room') return { mode: head, category: 'all', region: null, contextId: p1 ?? null, filters: none };
   const mode: Mode = head === 'streak' ? 'streak' : 'solo';
   const category = (categories as string[]).includes(p1) ? (p1 as CategoryFilter) : 'all';
   const region = (regions as string[]).includes(p2) ? (p2 as Region) : null;
-  return { mode, category, region, contextId: null };
+  // 4-segment form is canonical; tolerate `mode:category:<filters>` (3 segments, non-region) too.
+  const seg = p3 ?? (p2 && !region ? p2 : undefined);
+  const filters = decodeFiltersSegment(seg, category);
+  return { mode, category, region, contextId: null, filters };
 }

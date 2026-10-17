@@ -306,6 +306,20 @@ export interface Database {
     Views: Record<string, never>;
     Functions: {
       get_rounds: { Args: { p_category?: string; p_region?: string | null; p_n?: number }; Returns: Json };
+      get_rounds_filtered: {
+        Args: {
+          p_category?: string; p_region?: string | null; p_n?: number; p_period?: string;
+          p_make?: string | null; p_model?: string | null; p_sort?: string; p_exclude?: number[];
+        };
+        Returns: Json;
+      };
+      count_listings: {
+        Args: { p_category?: string; p_region?: string | null; p_period?: string; p_make?: string | null; p_model?: string | null };
+        Returns: number;
+      };
+      list_car_makes: { Args: { p_region?: string | null; p_period?: string }; Returns: Json };
+      list_car_models: { Args: { p_make: string; p_region?: string | null; p_period?: string }; Returns: Json };
+      get_listing_status: { Args: { p_ids: number[] }; Returns: Json };
       submit_guess: { Args: { p_token: string; p_guess: number; p_time_ms?: number | null }; Returns: Json };
       get_offline_pack: { Args: { p_category?: string; p_n?: number }; Returns: Json };
       get_daily: { Args: Record<string, never>; Returns: Json };

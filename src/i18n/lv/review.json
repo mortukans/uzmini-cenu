@@ -1,0 +1,16 @@
+{
+  "title": "Tavi sludinājumi",
+  "tap_hint": "Pieskaries sludinājumam, lai to apskatītu vai atvērtu oriģinālu",
+  "still_listed": "Joprojām aktīvs",
+  "checked": "pārbaudīts {{when}}",
+  "removed": "Vairs nav pieejams",
+  "unknown": "Pieejamība nav zināma",
+  "open_removed": "Atvērt sludinājumu (var būt noņemts)",
+  "today": "šodien",
+  "yesterday": "vakar",
+  "days_ago_one": "pirms {{count}} dienas",
+  "days_ago_zero": "pirms {{count}} dienām",
+  "days_ago_other": "pirms {{count}} dienām",
+  "round_short": "{{n}}. kārta",
+  "final_miss": "Pēdējā kārta"
+}

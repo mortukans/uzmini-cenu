@@ -10,6 +10,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as WebBrowser from 'expo-web-browser';
 
+import { isDefaultFilters } from '../../src/game/filters';
 import { formatEur } from '../../src/game/format';
 import { availableHints, type HintType, PHOTOS_BEFORE_HINT } from '../../src/game/hints';
 import { derivedValue } from '../../src/game/keypad';
@@ -68,7 +69,7 @@ export default function PlayScreen() {
         useSession.setState({ streakBest: bests[parsed.category] ?? 0 });
       }
       setFirstSession(!(await isOnboarded()));
-      await sessionActions.startSession({ mode: parsed.mode, category: parsed.category, region: parsed.region, sessionId, streak });
+      await sessionActions.startSession({ mode: parsed.mode, category: parsed.category, region: parsed.region, filters: parsed.filters, sessionId, streak });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
@@ -168,6 +169,11 @@ export default function PlayScreen() {
 
   // Exhaustive: every state renders one of these (src/game/view.ts), never a bare header.
   const view = playViewFor(s);
+  // Solo/streak with listing filters (period/sort/make/model): an empty pool is
+  // the filters' doing, so explain that and offer a way back to the home filters.
+  const filtered = (mode === 'solo' || mode === 'streak') && !isOnboarding && !isDefaultFilters(cfg?.filters ?? parsed.filters);
+  const emptyByFilters = view === 'error' && s.error === 'empty_pool' && filtered;
+  const adjustFilters = () => { track('round_adjust_filters', { mode }); sessionActions.reset(); router.replace('/(tabs)'); };
 
   if (view === 'summary' && mode !== 'daily') {
     return <Summary isOnboarding={isOnboarding} sessionId={sessionId ?? ''} />;
@@ -198,8 +204,9 @@ export default function PlayScreen() {
 
       {view === 'error' && (
         <View style={[styles.body, styles.center]}>
-          <Text style={styles.errorTitle}>{t(errorKeyFor(s))}</Text>
-          <Button title={t('common.retry')} onPress={() => sessionActions.recover()} style={styles.errorBtn} />
+          <Text style={styles.errorTitle}>{t(errorKeyFor(s, filtered))}</Text>
+          {emptyByFilters && <Button title={t('round.adjust_filters')} onPress={adjustFilters} style={styles.errorBtn} />}
+          <Button title={t('common.retry')} variant={emptyByFilters ? 'secondary' : 'primary'} onPress={() => sessionActions.recover()} style={emptyByFilters ? styles.errorBtnSecondary : styles.errorBtn} />
           <Button title={t('common.close')} variant="ghost" onPress={leave} />
         </View>
       )}
@@ -336,6 +343,7 @@ const styles = StyleSheet.create({
   inlineError: { ...type.small, color: colors.yellow, textAlign: 'center', paddingBottom: spacing.xs },
   errorTitle: { ...type.h3, color: colors.text, textAlign: 'center' },
   errorBtn: { alignSelf: 'stretch', marginTop: spacing.lg },
+  errorBtnSecondary: { alignSelf: 'stretch' },
   asking: { ...type.small, color: colors.textMuted, textTransform: 'uppercase' },
   hiddenPrice: { ...type.display, color: colors.textMuted },
   waiting: { ...type.body, color: colors.text, marginTop: spacing.lg },

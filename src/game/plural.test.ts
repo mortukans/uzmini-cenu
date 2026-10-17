@@ -70,3 +70,20 @@ describe('daily.streak_days', () => {
     expect(tl('en')('daily.streak_days', { count: 1 })).toBe('1 day in a row');
   });
 });
+
+describe('filters.matches', () => {
+  it('lv / ru / en', () => {
+    expect(tl('lv')('filters.matches', { count: 1 })).toBe('Atbilst 1 sludinājums');
+    expect(tl('lv')('filters.matches', { count: 21 })).toBe('Atbilst 21 sludinājums');
+    expect(tl('lv')('filters.matches', { count: 0 })).toBe('Atbilst 0 sludinājumu');
+    expect(tl('lv')('filters.matches', { count: 12 })).toBe('Atbilst 12 sludinājumu');
+    expect(tl('lv')('filters.matches', { count: 3 })).toBe('Atbilst 3 sludinājumi');
+    expect(tl('lv')('filters.matches', { count: 148 })).toBe('Atbilst 148 sludinājumi');
+    expect(tl('ru')('filters.matches', { count: 1 })).toBe('Подходит 1 объявление');
+    expect(tl('ru')('filters.matches', { count: 3 })).toBe('Подходят 3 объявления');
+    expect(tl('ru')('filters.matches', { count: 0 })).toBe('Подходит 0 объявлений');
+    expect(tl('ru')('filters.matches', { count: 15 })).toBe('Подходит 15 объявлений');
+    expect(tl('en')('filters.matches', { count: 1 })).toBe('1 listing matches');
+    expect(tl('en')('filters.matches', { count: 0 })).toBe('0 listings match');
+  });
+});
